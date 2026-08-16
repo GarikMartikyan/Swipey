@@ -1,4 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Swipey" parent="android:Theme.Material.NoActionBar" />
+    <!--
+      The Activity window only. Everything visible is drawn by Compose, so this theme's
+      job is limited to two things: getting out of Compose's way, and making the window
+      itself edge-to-edge.
+
+      windowBackground is the frame the system paints before the first Compose frame
+      lands. It resolves to @color/swipey_window (values/ light, values-night/ dark), so
+      cold start opens on the same canvas the app is about to draw rather than flashing
+      the platform's grey.
+    -->
+    <style name="Theme.Swipey" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/swipey_window</item>
+
+        <!-- Transparent bars; MainActivity turns off decor fitting and Compose insets
+             the interface out from under them. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+
+        <!-- Android 10+ will otherwise re-tint transparent bars with its own translucent
+             scrim, which puts a grey band back over the top and bottom of every photo. -->
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+
+        <!-- Let the canvas run into the cutout in both orientations. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The pre-Compose window background, light. Must track SwipeyLightColors.canvas in
+      ui/design/Tokens.kt — the two are the same surface, a few milliseconds apart.
+    -->
+    <color name="swipey_window">#FBFBFD</color>
+</resources>

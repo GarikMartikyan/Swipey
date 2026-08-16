@@ -24,7 +24,15 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
+    // ui/design/ is built on foundation + animation only. They already arrived
+    // transitively via material3; declared directly so the design system keeps compiling
+    // once the screens stop importing material3 and that dependency goes away.
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.animation)
     implementation(libs.compose.material3)
+    // Renders the @Preview catalogue in ui/design/Previews.kt. Debug only — it is a
+    // developer tool and has no business in a release build.
+    debugImplementation(libs.compose.ui.tooling)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.viewmodel.compose)

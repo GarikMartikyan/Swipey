@@ -1,19 +1,30 @@
 package com.swipey.app.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import com.swipey.app.ui.design.SwipeyDarkColors
 
-val KeepGreen = Color(0xFF2E7D32)
-val MarkRed = Color(0xFFC62828)
+/**
+ * What is left of the old Material theme.
+ *
+ * `SwipeyTheme` now lives in `ui/design/Tokens.kt` and wraps nothing in `MaterialTheme`;
+ * `MainActivity` calls that one. These two colours survive only because
+ * `ui/deck/SwipeCard.kt` still imports them for its swipe-direction tint, and that screen
+ * is rebuilt in the next pass — deleting them now would break a file this change is not
+ * meant to touch.
+ *
+ * They are no longer the old Material greens and reds: both forward to the design
+ * system's accents, so the tint under a half-swiped card already matches the buttons
+ * beneath it. Once `SwipeCard` moves to `SwipeyTheme.colors.keep` / `.bin`, delete this
+ * file.
+ */
 
-@Composable
-fun SwipeyTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
-        content = content,
-    )
-}
+@Deprecated(
+    "Use SwipeyTheme.colors.keep",
+    ReplaceWith("SwipeyTheme.colors.keep", "com.swipey.app.ui.design.SwipeyTheme"),
+)
+val KeepGreen = SwipeyDarkColors.keep
+
+@Deprecated(
+    "Use SwipeyTheme.colors.bin",
+    ReplaceWith("SwipeyTheme.colors.bin", "com.swipey.app.ui.design.SwipeyTheme"),
+)
+val MarkRed = SwipeyDarkColors.bin
