@@ -1,10 +1,5 @@
 package com.swipey.app.ui
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,10 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -29,10 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.swipey.app.SwipeyApp
 import com.swipey.app.data.RecoveryReport
-import com.swipey.app.domain.Album
 import com.swipey.app.domain.SortMode
-import com.swipey.app.domain.toAlbums
-import com.swipey.app.ui.albums.AlbumsScreen
 import com.swipey.app.ui.albums.SortChooserScreen
 import com.swipey.app.ui.bin.BinScreen
 import com.swipey.app.ui.bin.BinViewModel
@@ -41,20 +29,12 @@ import com.swipey.app.ui.common.queryCatching
 import com.swipey.app.ui.common.rememberTrashLauncher
 import com.swipey.app.ui.deck.DeckScreen
 import com.swipey.app.ui.deck.DeckViewModel
-import com.swipey.app.ui.design.SwipeyButton
-import com.swipey.app.ui.design.SwipeyButtonVariant
-import com.swipey.app.ui.design.SwipeyProgressBar
-import com.swipey.app.ui.design.SwipeyScreen
-import com.swipey.app.ui.design.SwipeySpacing
-import com.swipey.app.ui.design.SwipeyText
-import com.swipey.app.ui.design.SwipeyTheme
 import com.swipey.app.ui.home.HomeScreen
+import com.swipey.app.ui.home.HomeViewModel
 import com.swipey.app.ui.permission.PermissionGate
 import com.swipey.app.ui.result.ResultScreen
 import com.swipey.app.ui.review.ReviewScreen
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * The composable root. Owns navigation and the two pieces of state that outlive a
@@ -109,19 +89,44 @@ fun SwipeyRoot(app: SwipeyApp) {
 
         NavHost(navController, startDestination = Routes.HOME) {
             composable(Routes.HOME) {
+                // Home reads the whole gallery now — a hero, a cover per album, and the
+                // first card of a shuffle — so it has a ViewModel of its own rather than
+                // three LaunchedEffects each paying for queryAll() again. Scoped to this
+                // NavBackStackEntry, which survives on the back stack for as long as Home
+                // does, so the layout toggle and the loaded gallery outlive a trip into
+                // the deck.
+                val homeViewModel: HomeViewModel = viewModel(
+                    factory = viewModelFactory {
+                        initializer {
+                            HomeViewModel(app.mediaRepository, app.database, app.homePreferences)
+                        }
+                    },
+                )
+
                 // Refresh on every (re)entry — not just app start — so a restore done in
                 // the Bin, or a commit done in Review, is reflected the moment the user
-                // is back on Home.
+                // is back on Home. The gallery reload is what re-resolves the hero, the
+                // album covers and (with a fresh seed) the shuffle's first card.
+                //
                 // I4: same Recomposer exposure as the recovery pass above. A Room read
-                // that throws must leave the count stale, not take the Activity down.
+                // that throws must leave the count stale, not take the Activity down —
+                // HomeViewModel.load() does its own catching, inside the ViewModel.
                 LaunchedEffect(Unit) {
+                    homeViewModel.load()
                     queryCatching { binCount = app.trashRepository.trashedCount() }
                 }
+
                 HomeScreen(
+                    viewModel = homeViewModel,
                     binCount = binCount,
-                    onAllMedia = { navController.navigate(Routes.SORT) },
-                    onAlbums = { navController.navigate(Routes.ALBUMS) },
-                    onShuffle = { navController.navigate(Routes.deck(shuffle = true)) },
+                    // The hero's caption promises "newest first", so its tap says so
+                    // explicitly rather than relying on Routes.deck's default.
+                    onAllMedia = { navController.navigate(Routes.deck(sort = SortMode.NEWEST.name)) },
+                    onSort = { navController.navigate(Routes.SORT) },
+                    // The seed Home resolved its Shuffle thumbnail with, not a new one:
+                    // this is the half of the handoff that makes that thumbnail true.
+                    onShuffle = { seed -> navController.navigate(Routes.deck(shuffle = true, seed = seed)) },
+                    onAlbum = { album -> navController.navigate(Routes.deck(bucketId = album.bucketId)) },
                     onBin = { navController.navigate(Routes.BIN) },
                 )
             }
@@ -132,81 +137,22 @@ fun SwipeyRoot(app: SwipeyApp) {
                 )
             }
 
-            composable(Routes.ALBUMS) {
-                var albums by remember { mutableStateOf<List<Album>?>(null) }
-                // I4: the third state this route was missing. Without it a throw from
-                // queryAll() killed the Activity; catching it without a flag would instead
-                // leave `albums` null forever, i.e. a spinner that never resolves. `attempt`
-                // is the retry: bumping it re-keys the effect below, which is the only way
-                // to re-run a LaunchedEffect(Unit) without leaving the route.
-                var albumsFailed by remember { mutableStateOf(false) }
-                var attempt by remember { mutableIntStateOf(0) }
-                LaunchedEffect(attempt) {
-                    albumsFailed = false
-                    albums = null
-                    // Off Main: queryAll() can return up to ~20,000 rows, and toAlbums()
-                    // groups/sums/sorts every one of them.
-                    queryCatching {
-                        withContext(Dispatchers.Default) {
-                            app.mediaRepository.queryAll().toAlbums()
-                        }
-                    }.fold(
-                        onSuccess = { albums = it },
-                        onFailure = { albumsFailed = true },
-                    )
-                }
-                val loaded = albums
-                if (albumsFailed) {
-                    // The same shape the deck's own failure state uses (DeckScreen's
-                    // DeckMessage): centred, capped at a readable measure, one ghost
-                    // action. These two were the app's last Material widgets.
-                    SwipeyScreen {
-                        Column(
-                            Modifier.align(Alignment.Center).widthIn(max = 420.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            SwipeyText(
-                                Copy.LOAD_FAILED,
-                                style = SwipeyTheme.typography.body,
-                                color = SwipeyTheme.colors.textSecondary,
-                                textAlign = TextAlign.Center,
-                            )
-                            Spacer(Modifier.height(SwipeySpacing.lg))
-                            SwipeyButton(
-                                text = Copy.RETRY,
-                                onClick = { attempt++ },
-                                variant = SwipeyButtonVariant.Ghost,
-                            )
-                        }
-                    }
-                } else if (loaded == null) {
-                    // A 2dp rule at the top edge rather than a spinner, matching the deck
-                    // and both grids: nothing in Swipey rotates while you wait for it.
-                    SwipeyScreen(contentPadding = PaddingValues(0.dp)) {
-                        SwipeyProgressBar(
-                            progress = null,
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
-                    }
-                } else {
-                    AlbumsScreen(
-                        albums = loaded,
-                        onPick = { album -> navController.navigate(Routes.deck(bucketId = album.bucketId)) },
-                    )
-                }
-            }
-
             composable(
                 route = Routes.DECK,
                 arguments = listOf(
                     navArgument("bucketId") { type = NavType.LongType; defaultValue = -1L },
                     navArgument("sort") { type = NavType.StringType; defaultValue = "NEWEST" },
                     navArgument("shuffle") { type = NavType.BoolType; defaultValue = false },
+                    // Only consulted when shuffle is true. Every route string is built by
+                    // Routes.deck, which always writes a seed, so the default here is a
+                    // formality — but a deterministic one rather than a second clock read.
+                    navArgument("seed") { type = NavType.LongType; defaultValue = 0L },
                 ),
             ) { backStackEntry ->
                 val bucketIdArg = backStackEntry.arguments?.getLong("bucketId") ?: -1L
                 val sortArg = backStackEntry.arguments?.getString("sort") ?: "NEWEST"
                 val shuffleArg = backStackEntry.arguments?.getBoolean("shuffle") ?: false
+                val seedArg = backStackEntry.arguments?.getLong("seed") ?: 0L
 
                 // Fix round 2 re-review, Critical 1 residue: this must run inside `remember`,
                 // during composition, NOT inside a `LaunchedEffect`. `load()`'s synchronous
@@ -224,16 +170,19 @@ fun SwipeyRoot(app: SwipeyApp) {
                 // executes — strictly before `DeckScreen(...)` below is even called — so by
                 // the time DeckScreen composes and seeds its collected `State`, the reset has
                 // already landed.
-                remember(bucketIdArg, sortArg, shuffleArg) {
+                remember(bucketIdArg, sortArg, shuffleArg, seedArg) {
                     deckViewModel.load(
                         bucketId = bucketIdArg.takeIf { it != -1L },
                         sort = SortMode.valueOf(sortArg),
                         shuffle = shuffleArg,
-                        // Routes carries only the shuffle flag, not a seed (Routes.deck has
-                        // no seed parameter) — the seed is generated here, at the point the
-                        // shuffled load actually happens, per the brief's
-                        // "seed = System.currentTimeMillis()" note on Home's Shuffle entry.
-                        seed = System.currentTimeMillis(),
+                        // The seed now arrives on the route rather than being read off the
+                        // clock here. Home resolves the shuffle to show a thumbnail of the
+                        // card it opens on, and the only way that stays true is for this
+                        // load to deal the seed Home used. As a side effect the shuffle is
+                        // now stable across an Activity recreation — a rotation mid-session
+                        // used to re-key this `remember` with a fresh clock reading and
+                        // silently reshuffle the deck.
+                        seed = seedArg,
                     )
                 }
 

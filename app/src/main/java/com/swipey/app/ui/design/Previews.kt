@@ -118,6 +118,13 @@ private fun IconSetPreview() = PreviewCanvas {
         SwipeyIcon(SwipeyIcons.Close, "Close", tint = SwipeyTheme.colors.textPrimary)
         SwipeyIcon(SwipeyIcons.Bin, "Bin", tint = SwipeyTheme.colors.bin)
     }
+    Row(horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.md), verticalAlignment = Alignment.CenterVertically) {
+        // Home's three. ListRows and Sort sit within a thumb's width of each other on that
+        // screen, so this row is where to check they still read as different glyphs.
+        SwipeyIcon(SwipeyIcons.ListRows, "List", tint = SwipeyTheme.colors.textPrimary)
+        SwipeyIcon(SwipeyIcons.Grid, "Grid", tint = SwipeyTheme.colors.textPrimary)
+        SwipeyIcon(SwipeyIcons.Sort, "Sort", tint = SwipeyTheme.colors.textPrimary)
+    }
 }
 
 @SwipeyPreviews

@@ -15,22 +15,65 @@ package com.swipey.app.ui.common
 object Copy {
     const val APP_NAME = "Swipey"
 
+    // -----------------------------------------------------------------------
+    // Home
+    // -----------------------------------------------------------------------
+
     const val HOME_ALL_MEDIA = "All media"
-    const val HOME_ALL_MEDIA_SUB = "Everything, in the order you choose"
+
+    /**
+     * The hero's caption. "newest first" is a promise about what the next tap deals, so it
+     * is only true while the hero *is* the newest item and the tap *does* sort newest —
+     * both of which HomeViewModel and the hero's click handler guarantee. Change either
+     * and this line has to change with it; the sort control in the hero's corner is what
+     * keeps the other three orders reachable without making this sentence hedge.
+     */
+    fun homeAllMediaCaption(count: Int) = "${grouped(count)} items · newest first"
+
+    /** The hero's corner control. Icon-only, so this is its whole accessible name. */
+    const val HOME_SORT_ACTION = "Change the order"
+
     const val HOME_ALBUMS = "Albums"
-    const val HOME_ALBUMS_SUB = "Pick a folder to clean up"
+
+    /** An album row or tile: how many, and how much. */
+    fun albumSubtitle(count: Int, size: String) = "${grouped(count)} · $size"
+
     const val HOME_SHUFFLE = "Shuffle"
-    const val HOME_SHUFFLE_SUB = "Random order"
+
+    /**
+     * Said beside the thumbnail of the item the shuffle genuinely opens on — Home resolves
+     * the seed and the already-kept filter exactly as the deck will, and hands the same
+     * seed over. It is a factual claim, not flavour text: do not reuse it anywhere the
+     * thumbnail beside it isn't that item.
+     */
+    const val HOME_SHUFFLE_SUB = "Starts on this one"
+
+    /** The shuffle row when every item has already been kept — there is no first item. */
+    const val HOME_SHUFFLE_EMPTY = "Nothing left to shuffle"
+
+    /** The list/grid toggle. Names what the next tap does, since the glyph shows only where it goes. */
+    const val HOME_SHOW_GRID = "Show albums as a grid"
+    const val HOME_SHOW_LIST = "Show albums as a list"
+
+    /** Nothing in the gallery at all. Stated plainly — this is not an error. */
+    const val HOME_EMPTY = "Nothing to swipe yet"
+    const val HOME_EMPTY_BODY = "Photos and videos on this phone will show up here."
+
     const val HOME_BIN = "Bin"
-    fun homeBinSubtitle(count: Int) = "$count items"
+    fun homeBinSubtitle(count: Int) = "${grouped(count)} items"
+
+    /**
+     * Digit grouping for the counts Home shows, which run to five figures on a full phone.
+     * Locale-aware, so "2,573" and "2 573" both come out right.
+     */
+    private fun grouped(count: Int): String =
+        java.text.NumberFormat.getIntegerInstance().format(count)
 
     const val SORT_TITLE = "Sort by"
     const val SORT_NEWEST = "Newest first"
     const val SORT_OLDEST = "Oldest first"
     const val SORT_LARGEST = "Largest first"
     const val SORT_SMALLEST = "Smallest first"
-
-    const val ALBUMS_EMPTY = "No albums found"
 
     /**
      * Whole-branch review, I4 (spec §12: "empty state with retry; never crash"). One

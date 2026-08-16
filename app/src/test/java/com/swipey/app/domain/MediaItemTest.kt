@@ -4,8 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MediaItemTest {
-    private fun item(id: Long, size: Long, date: Long, bucket: Long = 1L, bucketName: String = "Camera") =
-        MediaItem(id, false, size, date, null, bucket, bucketName, "f$id.jpg")
+    private fun item(
+        id: Long,
+        size: Long,
+        date: Long,
+        bucket: Long = 1L,
+        bucketName: String = "Camera",
+        isVideo: Boolean = false,
+    ) = MediaItem(id, isVideo, size, date, null, bucket, bucketName, "f$id.jpg")
 
     @Test fun sortsNewestFirst() {
         val items = listOf(item(1, 10, 100), item(2, 20, 300), item(3, 30, 200))
@@ -60,5 +66,82 @@ class MediaItemTest {
 
     @Test fun emptyListProducesNoAlbums() {
         assertEquals(emptyList<Album>(), emptyList<MediaItem>().toAlbums())
+    }
+
+    // -----------------------------------------------------------------------
+    // Album covers
+    // -----------------------------------------------------------------------
+    //
+    // Home shows a thumbnail beside every album, and it has to be a *true* one: the
+    // album's own most recent item, not whichever row MediaStore happened to hand back
+    // first. These pin the selection rule and its tie-break.
+
+    @Test fun albumCoverIsTheMostRecentItem() {
+        val items = listOf(
+            item(1, 10, date = 100),
+            item(2, 10, date = 300),
+            item(3, 10, date = 200),
+        )
+        assertEquals(2L, items.toAlbums().single().coverId)
+    }
+
+    @Test fun albumCoverIgnoresTheOrderItemsArriveIn() {
+        val newest = item(2, 10, date = 300)
+        val rest = listOf(item(1, 10, date = 100), item(3, 10, date = 200))
+        assertEquals((listOf(newest) + rest).toAlbums().single().coverId, (rest + newest).toAlbums().single().coverId)
+    }
+
+    /**
+     * DATE_ADDED has one-second resolution, so a burst of shots — or a bulk import —
+     * routinely lands several rows on the same second. The higher `_ID` wins: MediaStore
+     * hands out ids monotonically, so within one timestamp the larger id is the later
+     * insertion, and the rule is total rather than "whichever the grouping saw last".
+     */
+    @Test fun albumCoverTieBreaksOnTheHighestId() {
+        val items = listOf(
+            item(7, 10, date = 300),
+            item(9, 10, date = 300),
+            item(8, 10, date = 300),
+        )
+        assertEquals(9L, items.toAlbums().single().coverId)
+    }
+
+    @Test fun albumCoverCarriesWhetherItIsAVideo() {
+        val items = listOf(
+            item(1, 10, date = 100),
+            item(2, 10, date = 300, isVideo = true),
+        )
+        val album = items.toAlbums().single()
+        assertEquals(2L, album.coverId)
+        assertEquals(true, album.coverIsVideo)
+    }
+
+    /**
+     * Home's hero is the most recent item on the device, and an album's cover is the most
+     * recent item *in that bucket* — the same question asked of two different lists, so
+     * they must not be able to disagree about what "most recent" means.
+     */
+    @Test fun mostRecentUsesTheSameRuleAcrossEveryBucket() {
+        val items = listOf(
+            item(1, 10, date = 100, bucket = 1),
+            item(5, 10, date = 300, bucket = 2),
+            item(6, 10, date = 300, bucket = 3),
+        )
+        assertEquals(6L, items.mostRecent()?.id)
+        assertEquals(6L, items.toAlbums().first { it.bucketId == 3L }.coverId)
+    }
+
+    @Test fun mostRecentOfNothingIsNull() {
+        assertEquals(null, emptyList<MediaItem>().mostRecent())
+    }
+
+    @Test fun eachAlbumGetsItsOwnCover() {
+        val items = listOf(
+            item(1, 100, date = 500, bucket = 1, bucketName = "Camera"),
+            item(2, 100, date = 900, bucket = 2, bucketName = "Screenshots"),
+            item(3, 400, date = 100, bucket = 2, bucketName = "Screenshots"),
+        )
+        // Biggest-first, so Screenshots (500 bytes) leads Camera (100).
+        assertEquals(listOf(2L, 1L), items.toAlbums().map { it.coverId })
     }
 }

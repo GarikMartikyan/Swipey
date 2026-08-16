@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.vector.path
 /**
  * Swipey's icon set, drawn here rather than depended upon.
  *
- * Nine glyphs is not enough to justify pulling in `material-icons-extended` (a few
+ * A dozen glyphs is not enough to justify pulling in `material-icons-extended` (a few
  * thousand vectors, most of a megabyte, drawn in someone else's house style). Drawing
  * them inline also means they obey one grid and one stroke weight, which is most of what
  * makes a set look like a set.
@@ -157,8 +157,72 @@ object SwipeyIcons {
     }
 
     /**
-     * Builds one glyph to the house rules above. All nine share this single [path] call,
-     * so the stroke weight, caps and joins can only ever be changed for the whole set.
+     * List — Home's albums-as-rows layout.
+     *
+     * Three lines, each led by a dot, rather than three bare lines: bare lines are [Sort],
+     * and the two glyphs sit within a thumb's width of each other on Home. The dot is the
+     * same zero-length-segment trick as [Info]'s tittle, so it is exactly [StrokeWidth]
+     * across and cannot drift from the set's weight.
+     */
+    val ListRows: ImageVector = icon("ListRows") {
+        moveTo(4f, 6.5f)
+        lineTo(4f, 6.5f)
+        moveTo(8.5f, 6.5f)
+        lineTo(20f, 6.5f)
+        moveTo(4f, 12f)
+        lineTo(4f, 12f)
+        moveTo(8.5f, 12f)
+        lineTo(20f, 12f)
+        moveTo(4f, 17.5f)
+        lineTo(4f, 17.5f)
+        moveTo(8.5f, 17.5f)
+        lineTo(20f, 17.5f)
+    }
+
+    /** Grid — Home's albums-as-tiles layout. Four squares, matching the two-column tiles. */
+    val Grid: ImageVector = icon("Grid") {
+        moveTo(4f, 4f)
+        lineTo(10.5f, 4f)
+        lineTo(10.5f, 10.5f)
+        lineTo(4f, 10.5f)
+        close()
+        moveTo(13.5f, 4f)
+        lineTo(20f, 4f)
+        lineTo(20f, 10.5f)
+        lineTo(13.5f, 10.5f)
+        close()
+        moveTo(4f, 13.5f)
+        lineTo(10.5f, 13.5f)
+        lineTo(10.5f, 20f)
+        lineTo(4f, 20f)
+        close()
+        moveTo(13.5f, 13.5f)
+        lineTo(20f, 13.5f)
+        lineTo(20f, 20f)
+        lineTo(13.5f, 20f)
+        close()
+    }
+
+    /**
+     * Sort — the order the deck deals in.
+     *
+     * Three lines of decreasing length. It says "ordered" without committing to a
+     * direction, which matters because the chooser behind it offers four orders, two of
+     * which run the other way.
+     */
+    val Sort: ImageVector = icon("Sort") {
+        moveTo(4f, 6.5f)
+        lineTo(20f, 6.5f)
+        moveTo(4f, 12f)
+        lineTo(15f, 12f)
+        moveTo(4f, 17.5f)
+        lineTo(10f, 17.5f)
+    }
+
+    /**
+     * Builds one glyph to the house rules above. Every glyph shares this single [path]
+     * call, so the stroke weight, caps and joins can only ever be changed for the whole
+     * set.
      */
     private fun icon(name: String, pathBuilder: PathBuilder.() -> Unit): ImageVector =
         ImageVector.Builder(
