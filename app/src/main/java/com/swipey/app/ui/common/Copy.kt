@@ -72,6 +72,68 @@ object Copy {
     const val DECK_DISCARD = "Discard"
     const val DECK_REVIEW = "Review"
 
+    // -----------------------------------------------------------------------
+    // The deck's chrome
+    // -----------------------------------------------------------------------
+
+    /**
+     * The three controls under the card. Each is the button equivalent of a gesture, and
+     * each is icon-only, so these strings are the *only* thing a screen reader has to go
+     * on — they name the decision, not the glyph.
+     *
+     * "item", not "photo": the deck shows videos too, and a label that is wrong a third
+     * of the time is worse than one that is slightly less specific.
+     */
+    const val DECK_BIN_ACTION = "Bin this item"
+    const val DECK_KEEP_ACTION = "Keep this item"
+    const val DECK_UNDO_ACTION = "Undo the last decision"
+
+    /** The visible Undo label, where there is room for one (the all-caught-up state). */
+    const val DECK_UNDO = "Undo"
+
+    /**
+     * The deck's position counter. [shown] is the card's ordinal — the 1-based place of
+     * the photo on screen, not the count of decisions already made — so the first card
+     * reads "1 / 318" rather than "0 / 318".
+     */
+    fun deckCounter(shown: Int, total: Int) = "$shown / $total"
+
+    /** Rule 1: *marked*, never "deleted" — nothing has moved anywhere yet. */
+    fun deckMarked(count: Int, size: String) = "$count marked · $size"
+
+    // -----------------------------------------------------------------------
+    // First-run coach marks
+    // -----------------------------------------------------------------------
+    //
+    // Shown once, over the very first card, then never again. The two directions are
+    // the whole mechanic; the third line is the reassurance, and it is the reason a
+    // first-time user is willing to try the gesture at all. Rules 1, 4 and 7 in one
+    // sentence: where things go, whose trash it is, and that nothing is destroyed.
+
+    const val COACH_TITLE = "Two ways to decide"
+    const val COACH_SWIPE_LEFT = "Swipe left to bin"
+    const val COACH_SWIPE_RIGHT = "Swipe right to keep"
+    const val COACH_REASSURE =
+        "Binned items go to your phone's trash — nothing is deleted permanently, " +
+            "and Undo takes back your last decision."
+    const val COACH_DISMISS = "Got it"
+
+    // -----------------------------------------------------------------------
+    // Video cards
+    // -----------------------------------------------------------------------
+
+    /**
+     * The sound toggle's label. It states the *current* state rather than the action,
+     * because it sits on screen while a video plays and has to be readable at a glance;
+     * the control's role is announced alongside it.
+     */
+    const val VIDEO_MUTED = "Muted"
+    const val VIDEO_SOUND_ON = "Sound on"
+
+    /** The tap action on a video: the whole surface is the play/pause control. */
+    const val VIDEO_PLAY = "Play"
+    const val VIDEO_PAUSE = "Pause"
+
     const val REVIEW_TITLE = "Review"
     const val REVIEW_EMPTY = "Nothing marked yet"
     fun reviewHeader(count: Int, size: String) = "$count items · $size"
