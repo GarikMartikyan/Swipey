@@ -18,9 +18,19 @@ sealed interface Resolution {
  * The spec §8.1 resolution table, used both by the startup recovery pass and by
  * Bin reconciliation.
  *
- * A live row whose displayName or sizeBytes disagrees with the local record means
- * MediaStore reused the id for a different file — treat it as vanished rather than
- * pointing the Bin at the wrong photo.
+ * The id-reuse guard below only fires for an *untrashed* live row whose displayName
+ * AND sizeBytes both disagree with the local record. It is deliberately narrower than
+ * "any mismatch": MediaProvider legitimately deletes and recomputes DISPLAY_NAME on
+ * every trash update (trimFilename truncation once the `.trashed-<epoch>-` prefix pushes
+ * a long name past 255 bytes, ensureUniqueFileColumns de-dup suffixing, MIME-driven
+ * extension coercion), and it unconditionally rewrites SIZE via the post-rename rescan
+ * it triggers (correcting a stale or zero SIZE left by an unscanned FUSE write). Both can
+ * happen to a row that is genuinely still trashed. Restricting the guard to untrashed rows
+ * means a row Swipey is actually holding in trust can never be discarded by it — a reused
+ * id points at a newly-scanned file, which is by definition not trashed, so IS_TRASHED = 1
+ * is itself strong identity evidence. Requiring both columns to disagree (rather than
+ * either) means a single-column MediaProvider rewrite is survivable while a real foreign
+ * file — which essentially never matches both name and size by chance — still trips it.
  */
 fun resolveRecords(
     local: List<LocalTrashRecord>,
@@ -29,7 +39,7 @@ fun resolveRecords(
     val row = live[record.mediaId]
     when {
         row == null -> Resolution.Vanished(record.mediaId)
-        row.displayName != record.displayName || row.sizeBytes != record.sizeBytes ->
+        !row.isTrashed && row.displayName != record.displayName && row.sizeBytes != record.sizeBytes ->
             Resolution.Vanished(record.mediaId)
         row.isTrashed -> when (record.state) {
             TrashState.TRASHED -> Resolution.Keep(record.mediaId)
