@@ -78,7 +78,7 @@ class TrashLauncher(
         queue = requests
         index = 0
         if (queue.isEmpty()) {
-            scope.launch { finish(repository.verifyAndResolve()) }
+            scope.launch { finish(verify()) }
         } else {
             launchNext()
         }
@@ -94,19 +94,41 @@ class TrashLauncher(
         if (index < queue.size) {
             launchNext()
         } else {
-            finish(repository.verifyAndResolve())
+            finish(verify())
         }
     }
 
     /** User cancelled: stop launching further chunks, but still verify what did land. */
     suspend fun onCancelled() {
         index = queue.size
-        finish(repository.verifyAndResolve())
+        finish(verify())
     }
+
+    /**
+     * Whole-branch review, I4. `verifyAndResolve()` is a MediaStore + Room round trip and
+     * every call to it lands here, on a terminal path with nothing above it to catch a
+     * throw: the caller is an ActivityResult callback's `scope.launch`, so an exception
+     * crashes the process — and worse, it skips [finish], leaving `inFlight` latched true
+     * in `rememberSaveable` state that survives the restart. Commit (or Restore) would
+     * then be disabled forever, since `start()` is a no-op while `inFlight`.
+     *
+     * Failing to an empty report is honest, not a lie of omission: `verifyAndResolve()`
+     * reads every live row before it writes anything, so a throw leaves the PENDING_TRASH
+     * rows exactly as they were — nothing was confirmed and nothing was lost. An empty
+     * `confirmedTrashed` is what the callers already treat as "no outcome to report":
+     * Review stays put with Copy.COMMIT_CANCELLED and the marks intact, and the Bin
+     * reloads unchanged. The next recovery pass resolves the rows for real.
+     */
+    private suspend fun verify(): RecoveryReport =
+        queryCatching { repository.verifyAndResolve() }.getOrElse { EMPTY_REPORT }
 
     private fun finish(report: RecoveryReport) {
         inFlight = false
         onFinished(report)
+    }
+
+    private companion object {
+        val EMPTY_REPORT = RecoveryReport(emptyList(), emptyList(), emptyList(), emptyList())
     }
 }
 

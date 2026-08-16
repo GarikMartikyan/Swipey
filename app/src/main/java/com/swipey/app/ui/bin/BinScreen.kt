@@ -2,6 +2,7 @@ package com.swipey.app.ui.bin
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -70,7 +71,19 @@ fun BinScreen(viewModel: BinViewModel) {
             Text(Copy.vanishedNotice(state.vanishedCount), style = MaterialTheme.typography.bodySmall)
         }
 
-        if (state.entries.isEmpty() && !state.loading) {
+        // I4 / spec §12. Checked before the empty branch: "Nothing here" after a query
+        // threw would tell the user their trashed photos are gone, which is both false and
+        // the single most alarming thing this screen could say.
+        if (state.failed) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(Copy.BIN_LOAD_FAILED)
+                Button(onClick = { viewModel.refresh() }) { Text(Copy.RETRY) }
+            }
+        } else if (state.entries.isEmpty() && !state.loading) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(Copy.BIN_EMPTY)
             }

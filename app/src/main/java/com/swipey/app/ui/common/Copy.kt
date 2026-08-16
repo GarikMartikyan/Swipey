@@ -32,6 +32,17 @@ object Copy {
 
     const val ALBUMS_EMPTY = "No albums found"
 
+    /**
+     * Whole-branch review, I4 (spec §12: "empty state with retry; never crash"). One
+     * neutral message for every read that throws — the user can't act on the difference
+     * between an IllegalArgumentException and a SecurityException, and the honest thing to
+     * say is that nothing was read, not that anything was lost. Nothing is: a failed read
+     * writes nothing.
+     */
+    const val LOAD_FAILED = "Couldn't read your photos just now."
+    const val BIN_LOAD_FAILED = "Couldn't read your bin just now."
+    const val RETRY = "Try again"
+
     const val PERMISSION_TITLE = "Swipey needs access to your photos and videos"
     const val PERMISSION_BODY =
         "Swipey shows your photos one at a time so you can keep or bin them. " +
@@ -98,6 +109,19 @@ object Copy {
      * result — this is "nothing happened, nothing was trashed," never "some items were."
      */
     const val COMMIT_FAILED = "Couldn't move those items to trash. Nothing was changed — try again."
+
+    /**
+     * Whole-branch review, I1. Spec §8.2: "*Cancellation (RESULT_CANCELED) leaves marks
+     * intact and returns to Review with a snackbar.*" Shown on Review itself, so the marks
+     * the sentence promises are still there are visible right behind it.
+     *
+     * Worded to be true of every path that reaches it, not just a "Don't allow" tap: a
+     * declined dialog, a dialog backed out of, and a verification query that threw all
+     * leave exactly this state — nothing trashed, marks untouched. Rule 1 wording ("moved
+     * to trash", never "deleted"); it claims nothing about what MediaStore did, only what
+     * it did not do.
+     */
+    const val COMMIT_CANCELLED = "Nothing was moved to trash — your marked items are still here."
 
     // F8(c): distinct from BIN_TITLE — on ResultScreen, right after items were just binned,
     // a bare "Bin" label reads ambiguously as the verb (throw away) rather than the

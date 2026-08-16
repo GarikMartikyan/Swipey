@@ -1,8 +1,13 @@
 package com.swipey.app.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -33,6 +39,7 @@ import com.swipey.app.ui.albums.SortChooserScreen
 import com.swipey.app.ui.bin.BinScreen
 import com.swipey.app.ui.bin.BinViewModel
 import com.swipey.app.ui.common.Copy
+import com.swipey.app.ui.common.queryCatching
 import com.swipey.app.ui.common.rememberTrashLauncher
 import com.swipey.app.ui.deck.DeckScreen
 import com.swipey.app.ui.deck.DeckViewModel
@@ -79,9 +86,20 @@ fun SwipeyRoot(app: SwipeyApp) {
         // content, not before it — TrashRepository guards itself against missing full
         // media access too, but the call site itself must not race ahead of the
         // permission check. Home must not read binCount before this completes.
+        //
+        // Whole-branch review, I4: wrapped. A throw here does not stay local — a
+        // LaunchedEffect's exception propagates to the Recomposer and kills the Activity,
+        // and since this effect runs on every entry into the FULL-access branch that is a
+        // crash *loop* on every launch. MediaProvider throws readily (SecurityException on
+        // a permission race, IllegalArgumentException on a selection it rejects). The pass
+        // computes every live row before it writes anything, so a throw leaves the
+        // database untouched: binCount simply keeps its previous value and the next entry
+        // into this branch retries. Nothing is lost, and the app stays usable.
         LaunchedEffect(Unit) {
-            app.trashRepository.verifyAndResolve()
-            binCount = app.trashRepository.trashedCount()
+            queryCatching {
+                app.trashRepository.verifyAndResolve()
+                binCount = app.trashRepository.trashedCount()
+            }
         }
 
         NavHost(navController, startDestination = Routes.HOME) {
@@ -89,8 +107,10 @@ fun SwipeyRoot(app: SwipeyApp) {
                 // Refresh on every (re)entry — not just app start — so a restore done in
                 // the Bin, or a commit done in Review, is reflected the moment the user
                 // is back on Home.
+                // I4: same Recomposer exposure as the recovery pass above. A Room read
+                // that throws must leave the count stale, not take the Activity down.
                 LaunchedEffect(Unit) {
-                    binCount = app.trashRepository.trashedCount()
+                    queryCatching { binCount = app.trashRepository.trashedCount() }
                 }
                 HomeScreen(
                     binCount = binCount,
@@ -109,15 +129,38 @@ fun SwipeyRoot(app: SwipeyApp) {
 
             composable(Routes.ALBUMS) {
                 var albums by remember { mutableStateOf<List<Album>?>(null) }
-                LaunchedEffect(Unit) {
+                // I4: the third state this route was missing. Without it a throw from
+                // queryAll() killed the Activity; catching it without a flag would instead
+                // leave `albums` null forever, i.e. a spinner that never resolves. `attempt`
+                // is the retry: bumping it re-keys the effect below, which is the only way
+                // to re-run a LaunchedEffect(Unit) without leaving the route.
+                var albumsFailed by remember { mutableStateOf(false) }
+                var attempt by remember { mutableIntStateOf(0) }
+                LaunchedEffect(attempt) {
+                    albumsFailed = false
+                    albums = null
                     // Off Main: queryAll() can return up to ~20,000 rows, and toAlbums()
                     // groups/sums/sorts every one of them.
-                    albums = withContext(Dispatchers.Default) {
-                        app.mediaRepository.queryAll().toAlbums()
-                    }
+                    queryCatching {
+                        withContext(Dispatchers.Default) {
+                            app.mediaRepository.queryAll().toAlbums()
+                        }
+                    }.fold(
+                        onSuccess = { albums = it },
+                        onFailure = { albumsFailed = true },
+                    )
                 }
                 val loaded = albums
-                if (loaded == null) {
+                if (albumsFailed) {
+                    Column(
+                        Modifier.fillMaxSize().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(Copy.LOAD_FAILED)
+                        Button(onClick = { attempt++ }) { Text(Copy.RETRY) }
+                    }
+                } else if (loaded == null) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
@@ -229,17 +272,56 @@ fun SwipeyRoot(app: SwipeyApp) {
                     repository = app.trashRepository,
                 ) { report ->
                     scope.launch {
-                        // TrashLauncher.finish() already ran verifyAndResolve() to produce
-                        // [report]; binView() is queried again here only to attach each
-                        // newly-confirmed item's expiry date for ResultScreen.
-                        val view = app.trashRepository.binView()
-                        val confirmed = report.confirmedTrashed.toSet()
-                        trashExpirySec = view.entries
-                            .filter { it.record.mediaId in confirmed }
-                            .mapNotNull { it.expiresAtSec }
-                            .minOrNull()
+                        // Whole-branch review, I1. Spec §8.2: "Cancellation (RESULT_CANCELED)
+                        // leaves marks intact and returns to Review"; §12 repeats it. This
+                        // handler used to navigate to Result unconditionally, with
+                        // popUpTo(REVIEW) { inclusive = true } — and Routes.REVIEW is
+                        // navigated to from exactly one place (the Deck route's onReview),
+                        // whose own popUpTo already removed Deck on the way in. So popping
+                        // Review left no route back to the marks at all: they survived in
+                        // the Activity-scoped DeckViewModel.session with nothing able to
+                        // render them, until the next load() reset the session outright.
+                        // Tapping "Don't allow" once cost the user every swipe they'd made.
+                        //
+                        // confirmedTrashed is the only field that means "MediaStore says
+                        // these are now in the trash" — it is populated from the
+                        // MarkTrashed resolutions, which require IS_TRASHED = 1, never from
+                        // RESULT_OK. Empty therefore means nothing was trashed, whatever the
+                        // cause: declined, backed out of, or a verification query that threw
+                        // (TrashLauncher reports an empty report rather than crashing, and
+                        // the PENDING_TRASH rows are untouched in that case). There is no
+                        // outcome for Result to describe honestly, so stay put and say so.
+                        // A partially-approved chunked commit has a non-empty
+                        // confirmedTrashed and still goes to Result, which reports the
+                        // shortfall via Copy.cancelled().
+                        if (report.confirmedTrashed.isEmpty()) {
+                            commitError = Copy.COMMIT_CANCELLED
+                            // I4: a throw here would otherwise crash from inside the
+                            // launcher's terminal callback. The count is cosmetic.
+                            queryCatching { binCount = app.trashRepository.trashedCount() }
+                            return@launch
+                        }
+                        // I4: binView()/trashedCount() are two more unguarded MediaStore +
+                        // Room reads, on the path immediately after a successful commit.
+                        // Falling back to the report alone still renders an honest Result —
+                        // the expiry line is simply omitted (it is nullable already).
+                        // Cleared first: this state outlives the destination, and leaving a
+                        // previous commit's date in place would date *this* commit wrongly
+                        // if the query below fails.
+                        trashExpirySec = null
+                        queryCatching {
+                            // TrashLauncher.finish() already ran verifyAndResolve() to produce
+                            // [report]; binView() is queried again here only to attach each
+                            // newly-confirmed item's expiry date for ResultScreen.
+                            val view = app.trashRepository.binView()
+                            val confirmed = report.confirmedTrashed.toSet()
+                            trashExpirySec = view.entries
+                                .filter { it.record.mediaId in confirmed }
+                                .mapNotNull { it.expiresAtSec }
+                                .minOrNull()
+                            binCount = app.trashRepository.trashedCount()
+                        }
                         trashReport = report
-                        binCount = app.trashRepository.trashedCount()
                         navController.navigate(Routes.RESULT) {
                             // Prevents Back from Result returning to a Review grid full of
                             // items that were already just committed.

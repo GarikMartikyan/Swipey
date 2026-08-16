@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import com.swipey.app.domain.LiveTrashRow
 import com.swipey.app.domain.MediaItem
+import com.swipey.app.domain.chunkedForRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -85,18 +86,32 @@ class MediaRepository(private val resolver: ContentResolver) {
      * Verification after a trash or restore. MATCH_INCLUDE is required: a bare
      * collection query resolves to MATCH_EXCLUDE and would report every successful
      * trash as a failure (spec §8.2). An absent row means "gone", not "not trashed".
+     *
+     * Whole-branch review, I4: chunked. The 500-URI limit of §13 was applied only to
+     * `createTrashRequest`, never here — so binning 1,500 items built a single ~12 KB
+     * selection with 1,500 `IN`-list terms, untested at that scale. This is the one query
+     * the entire recoverability guarantee rests on: an `IllegalArgumentException` from an
+     * oversized selection would abort the pass, and (worse, if the limit were ever hit
+     * silently) a truncated result reads as "these rows are absent" — which resolves to
+     * Vanished and deletes the records. Reusing the same [chunkedForRequest] boundary
+     * keeps one number to reason about; the per-chunk results are merged, and an id can
+     * appear in at most one chunk, so the merge is collision-free.
      */
     suspend fun verify(ids: List<Long>, isVideo: Boolean): Map<Long, LiveTrashRow> =
         withContext(Dispatchers.IO) {
             if (ids.isEmpty()) return@withContext emptyMap()
-            val args = Bundle().apply {
-                putString(
-                    ContentResolver.QUERY_ARG_SQL_SELECTION,
-                    "${MediaStore.MediaColumns._ID} IN (${ids.joinToString(",")})",
-                )
-                putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
+            val rows = mutableListOf<LiveTrashRow>()
+            ids.chunkedForRequest().forEach { chunk ->
+                val args = Bundle().apply {
+                    putString(
+                        ContentResolver.QUERY_ARG_SQL_SELECTION,
+                        "${MediaStore.MediaColumns._ID} IN (${chunk.joinToString(",")})",
+                    )
+                    putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
+                }
+                rows += readTrashRows(isVideo, args)
             }
-            readTrashRows(isVideo, args).associateBy { it.mediaId }
+            rows.associateBy { it.mediaId }
         }
 
     private fun readTrashRows(isVideo: Boolean, args: Bundle): List<LiveTrashRow> {

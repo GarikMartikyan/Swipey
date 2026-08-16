@@ -10,6 +10,7 @@ import com.swipey.app.data.TrashRepository
 import com.swipey.app.domain.BinEntry
 import com.swipey.app.domain.MediaAccess
 import com.swipey.app.ui.common.Copy
+import com.swipey.app.ui.common.queryCatching
 import com.swipey.app.ui.permission.currentMediaAccess
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,14 @@ data class BinUiState(
     // button while this is true. TrashLauncher's own inFlight flag is the correctness
     // half (a no-op re-entry into start()); this is what stops the second tap.
     val restoring: Boolean = false,
+    /**
+     * Whole-branch review, I4 (spec §12: "empty state with retry; never crash"). Distinct
+     * from an empty [entries] list: "your bin is empty" and "we couldn't read your bin"
+     * are opposite claims, and only one of them is safe to make after a query threw. The
+     * grid is suppressed while this is set so a stale or empty selection can't be
+     * restored against state nobody managed to read.
+     */
+    val failed: Boolean = false,
 )
 
 class BinViewModel(
@@ -46,8 +55,16 @@ class BinViewModel(
     /** Reconciles on every open, per spec §8. Also resolves any PENDING_* rows. */
     fun refresh() {
         viewModelScope.launch {
-            repository.verifyAndResolve()
-            reload(restoreMessage = null)
+            // I4: verifyAndResolve() and reload() are both MediaStore + Room round trips,
+            // and an uncaught throw from either reached viewModelScope's handler and killed
+            // the process — on the one screen whose whole job is showing the user that
+            // their photos are still recoverable. verifyAndResolve() reads every live row
+            // before writing anything, so a throw leaves the records untouched and this is
+            // purely a display failure.
+            queryCatching {
+                repository.verifyAndResolve()
+                reload(restoreMessage = null)
+            }.onFailure { _state.value = BinUiState(loading = false, failed = true) }
         }
     }
 
@@ -95,7 +112,12 @@ class BinViewModel(
             } else {
                 Copy.restoreOutcome(attemptedIds.count { it in report.restored }, attemptedIds.size)
             }
-            reload(restoreMessage = message)
+            // I4: reload() queries MediaStore twice. This is the launcher's terminal
+            // callback, so a throw here would crash right after a restore dialog — the
+            // restore itself already happened and was already recorded by
+            // verifyAndResolve(); only the redraw failed.
+            queryCatching { reload(restoreMessage = message) }
+                .onFailure { _state.value = BinUiState(loading = false, failed = true) }
         }
     }
 

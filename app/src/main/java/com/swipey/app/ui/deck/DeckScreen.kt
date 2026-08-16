@@ -89,6 +89,24 @@ fun DeckScreen(
         return
     }
 
+    // I4 / spec §12: a read that threw lands here instead of crashing. Checked before the
+    // exhausted branch below so a failed load never renders as "nothing left to review" —
+    // telling the user their album is empty when it was never read would be a lie, and one
+    // that invites them to move on rather than retry.
+    if (state.failed) {
+        Column(
+            Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(Copy.LOAD_FAILED, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = { viewModel.retry() }) { Text(Copy.RETRY) }
+            TextButton(onClick = onDone) { Text(Copy.RESULT_DONE) }
+        }
+        return
+    }
+
     if (state.exhausted && state.markedCount == 0) {
         Column(
             Modifier.fillMaxSize().padding(24.dp),
