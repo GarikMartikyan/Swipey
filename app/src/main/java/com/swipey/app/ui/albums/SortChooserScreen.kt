@@ -11,18 +11,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.swipey.app.domain.SortMode
+import com.swipey.app.ui.common.Copy
 
 private val labels = listOf(
-    SortMode.NEWEST to "Newest first",
-    SortMode.OLDEST to "Oldest first",
-    SortMode.LARGEST to "Largest first",
-    SortMode.SMALLEST to "Smallest first",
+    SortMode.NEWEST to Copy.SORT_NEWEST,
+    SortMode.OLDEST to Copy.SORT_OLDEST,
+    SortMode.LARGEST to Copy.SORT_LARGEST,
+    SortMode.SMALLEST to Copy.SORT_SMALLEST,
 )
 
 @Composable
 fun SortChooserScreen(onPick: (SortMode) -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Sort by", style = MaterialTheme.typography.headlineSmall)
+        Text(Copy.SORT_TITLE, style = MaterialTheme.typography.headlineSmall)
         labels.forEach { (mode, label) ->
             Text(
                 label,

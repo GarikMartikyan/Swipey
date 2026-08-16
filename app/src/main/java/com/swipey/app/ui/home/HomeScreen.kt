@@ -26,7 +26,7 @@ fun HomeScreen(
         HomeEntry(Copy.HOME_ALL_MEDIA, Copy.HOME_ALL_MEDIA_SUB, onAllMedia)
         HomeEntry(Copy.HOME_ALBUMS, Copy.HOME_ALBUMS_SUB, onAlbums)
         HomeEntry(Copy.HOME_SHUFFLE, Copy.HOME_SHUFFLE_SUB, onShuffle)
-        HomeEntry(Copy.HOME_BIN, "$binCount items", onBin)
+        HomeEntry(Copy.HOME_BIN, Copy.homeBinSubtitle(binCount), onBin)
     }
 }
 

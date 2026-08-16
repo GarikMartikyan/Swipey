@@ -46,14 +46,17 @@ class DeckViewModel(
 
     fun load(bucketId: Long?, sort: SortMode, shuffle: Boolean, seed: Long) {
         viewModelScope.launch {
-            val kept = db.reviewed().keptIds().toSet()
+            val kept = db.reviewed().keptIds()
             val fetched = media.queryAll()
             // Filtering/sorting/shuffling up to 20,000 items is pure CPU work; keep it
             // off Main (fix round 1, Important 4) — queryAll()/keptIds() both resume
-            // on Main after their own IO hop.
+            // on Main after their own IO hop. The .toSet() belongs in here too (Task 20
+            // residue finding): it's still O(n) work over a list that can be large, and
+            // leaving it outside this block put it back on Main.
             val ordered = withContext(Dispatchers.Default) {
+                val keptIds = kept.toSet()
                 val filtered = fetched
-                    .filter { it.id !in kept }
+                    .filter { it.id !in keptIds }
                     .filter { bucketId == null || it.bucketId == bucketId }
                 if (shuffle) filtered.shuffledWithSeed(seed) else filtered.sortedFor(sort)
             }

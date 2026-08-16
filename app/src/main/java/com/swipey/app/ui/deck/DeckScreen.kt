@@ -63,7 +63,14 @@ fun DeckScreen(
             Text(Copy.DECK_EMPTY_TITLE, style = MaterialTheme.typography.titleLarge)
             Text(Copy.DECK_NOTHING_MARKED)
             Spacer(Modifier.height(16.dp))
-            TextButton(onClick = { viewModel.undo() }) { Text("Undo") }
+            // NEW 2: state.position doubles as "history size" — SwipeSession.position is
+            // incremented by every advance() and decremented by every undo(), so it's
+            // exactly zero iff there is nothing left to undo (empty album, or an album
+            // where every item already has a KEEP row). A dead, always-disabled-in-effect
+            // Undo button here would be confusing; hide it instead.
+            if (state.position > 0) {
+                TextButton(onClick = { viewModel.undo() }) { Text("Undo") }
+            }
             Button(onClick = onDone) { Text("Done") }
         }
         return

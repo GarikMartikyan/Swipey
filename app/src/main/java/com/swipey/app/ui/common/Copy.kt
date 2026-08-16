@@ -22,6 +22,15 @@ object Copy {
     const val HOME_SHUFFLE = "Shuffle"
     const val HOME_SHUFFLE_SUB = "Random order"
     const val HOME_BIN = "Bin"
+    fun homeBinSubtitle(count: Int) = "$count items"
+
+    const val SORT_TITLE = "Sort by"
+    const val SORT_NEWEST = "Newest first"
+    const val SORT_OLDEST = "Oldest first"
+    const val SORT_LARGEST = "Largest first"
+    const val SORT_SMALLEST = "Smallest first"
+
+    const val ALBUMS_EMPTY = "No albums found"
 
     const val PERMISSION_TITLE = "Swipey needs access to your photos and videos"
     const val PERMISSION_BODY =

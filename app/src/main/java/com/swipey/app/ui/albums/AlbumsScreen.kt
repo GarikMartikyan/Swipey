@@ -14,11 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.swipey.app.domain.Album
 import com.swipey.app.domain.formatBytes
+import com.swipey.app.ui.common.Copy
 
 @Composable
 fun AlbumsScreen(albums: List<Album>, onPick: (Album) -> Unit) {
     if (albums.isEmpty()) {
-        Text("No albums found", Modifier.padding(24.dp))
+        Text(Copy.ALBUMS_EMPTY, Modifier.padding(24.dp))
         return
     }
     LazyColumn(Modifier.fillMaxSize()) {

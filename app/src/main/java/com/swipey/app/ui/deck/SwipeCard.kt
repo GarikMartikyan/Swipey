@@ -94,6 +94,17 @@ fun SwipeCard(
         }
     }
 
+    // Task 20 NEW 1: SideEffect above only reports "committing" while this composable
+    // is part of the tree. If the card leaves composition mid fly-off (the caller swaps
+    // to a different branch — e.g. the deck becomes exhausted — the instant the commit
+    // animation finishes), there is no further SideEffect to report false, so the
+    // caller's "committing" flag latches true forever. This unkeyed DisposableEffect
+    // fires exactly once, on the card's final removal from composition (not on re-key
+    // for the next item, which is handled by the keyed effect above), and clears it.
+    DisposableEffect(Unit) {
+        onDispose { onCommittingChanged(false) }
+    }
+
     val progress = (offsetX.value / threshold).coerceIn(-1f, 1f)
 
     Box(
