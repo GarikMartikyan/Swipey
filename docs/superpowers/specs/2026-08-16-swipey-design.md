@@ -43,7 +43,8 @@ through the OS's own expiry sweep or through the user's own gallery app.
 |---|---|---|
 | Language / UI | Kotlin + Jetpack Compose | Native gesture feel; the whole app is one MediaStore data source |
 | minSdk | 33 | Granular `READ_MEDIA_*` permissions with no legacy storage branch |
-| compileSdk / targetSdk | 36 | Current platform installed locally (android-36) |
+| compileSdk | 37 | Forced by Compose BOM 2026.08.00, which refuses to link against 36; verified by build spike |
+| targetSdk | 36 | Matches the runtime behaviour the §8 research was done against; still above `VANILLA_ICE_CREAM`, so the 2000-URI cap applies |
 | JDK | 17 (Zulu or Oracle, both present) | Required by Android Gradle Plugin; JDK 23 is also installed and must not be used |
 | Architecture | Single Gradle module, no DI framework | ~15 source files; Hilt and use-case layers would be scaffolding without payoff |
 | Image loading | Coil 3 (`coil-compose` + `coil-video`) | Handles `content://` URIs and video frame extraction |
