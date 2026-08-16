@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Swipey's launcher icon.
+
+  There are no density-bucket PNGs beside this file and there should not be. minSdk is 33,
+  so every device that can install Swipey supports adaptive icons and resolves this
+  qualifier; the legacy mipmap-*dpi rasters exist only to serve API levels this app never
+  reaches. The layers are vectors, so there is nothing to rasterise at build time either.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/swipey_icon_ground" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

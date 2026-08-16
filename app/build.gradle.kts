@@ -50,3 +50,14 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
 }
+
+// Two unit tests read project sources off disk rather than exercising compiled classes:
+// DomainPurityTest scans src/main/java for stray Android imports, and MarkGeometryTest
+// parses the icon vectors in src/main/res against Mark.kt's geometry. Gradle has no way to
+// know that, so it treats the test task as up-to-date when only a resource changes — which
+// means an icon edited into a shape the mask would clip would silently skip its own guard.
+// Declaring the directories as inputs makes the staleness check honest.
+tasks.withType<Test>().configureEach {
+    inputs.dir("src/main/res").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir("src/main/java").withPathSensitivity(PathSensitivity.RELATIVE)
+}

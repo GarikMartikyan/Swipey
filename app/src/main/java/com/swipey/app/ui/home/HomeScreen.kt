@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -55,6 +57,7 @@ import com.swipey.app.ui.design.SwipeyDivider
 import com.swipey.app.ui.design.SwipeyIcon
 import com.swipey.app.ui.design.SwipeyIconButton
 import com.swipey.app.ui.design.SwipeyIcons
+import com.swipey.app.ui.design.SwipeyMark
 import com.swipey.app.ui.design.SwipeyMotion
 import com.swipey.app.ui.design.SwipeyProgressBar
 import com.swipey.app.ui.design.SwipeyRadius
@@ -215,6 +218,16 @@ private fun HomeHeader(showToggle: Boolean, albumsAsGrid: Boolean, onToggle: (Bo
             .padding(top = SwipeySpacing.xxl, bottom = SwipeySpacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The lockup. The mark is measured from the wordmark's type size rather than fixed
+        // in dp, so the two scale together: at 200% font scale a fixed-size mark would sit
+        // beside a wordmark twice its height and read as a stray bullet. 0.82 puts the
+        // mark a little above the cap height of the "S", which is where a mark sits.
+        val markHeight = with(LocalDensity.current) {
+            SwipeyTheme.typography.display.fontSize.toDp() * 0.82f
+        }
+        SwipeyMark(height = markHeight)
+        Spacer(Modifier.width(SwipeySpacing.md))
+
         SwipeyText(
             Copy.APP_NAME,
             // Takes the slack so the toggle stays pinned right as the wordmark grows with

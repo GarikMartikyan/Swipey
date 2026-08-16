@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The monochrome layer, for Android 13+ themed icons.
+
+  When the user turns on themed icons the launcher throws away the foreground's colours and
+  tints this layer with one colour drawn from their wallpaper. Marks that carry their
+  meaning in a colour contrast disappear here; this one doesn't, because the two halves are
+  separated by a 6dp gap rather than by hue. That gap is the whole reason the Split works
+  flattened — do not close it.
+
+  Authored in black on transparent, which is the contract: the system supplies the tint and
+  the ground, and any colour committed here is overwritten.
+
+  Geometry identical to ic_launcher_foreground.xml, minus the split into two fills. See that
+  file for why the card is 46x52 and why it stays inside the 33dp guaranteed circle.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#000000"
+        android:pathData="M43,28 H53.5 L48.5,80 H43 A12,12 0 0 1 31,68 V40 A12,12 0 0 1 43,28 Z" />
+
+    <path
+        android:fillColor="#000000"
+        android:pathData="M59.5,28 H65 A12,12 0 0 1 77,40 V68 A12,12 0 0 1 65,80 H54.5 Z" />
+
+</vector>

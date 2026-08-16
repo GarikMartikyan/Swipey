@@ -5,4 +5,19 @@
       ui/design/Tokens.kt — the two are the same surface, a few milliseconds apart.
     -->
     <color name="swipey_window">#FBFBFD</color>
+
+    <!--
+      The ground behind the launcher icon's mark.
+
+      White rather than the app's near-black canvas. The icon has to hold its own in a grid
+      of other icons on a photograph, not match the screen it opens: a dark disc among the
+      light ones every launcher is full of recedes into the wallpaper instead of reading,
+      which is exactly what the first cut of this icon did.
+
+      This one must NEVER gain a values-night counterpart. A launcher icon is a fixed piece
+      of artwork: it keeps the same ground whether the phone is in light or dark mode, the
+      same way every other icon on the home screen does. Give it a night override and the
+      app's identity changes shape at sunset.
+    -->
+    <color name="swipey_icon_ground">#FFFFFF</color>
 </resources>
