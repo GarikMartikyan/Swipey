@@ -27,10 +27,12 @@ sealed interface Resolution {
  * it triggers (correcting a stale or zero SIZE left by an unscanned FUSE write). Both can
  * happen to a row that is genuinely still trashed. Restricting the guard to untrashed rows
  * means a row Swipey is actually holding in trust can never be discarded by it — a reused
- * id points at a newly-scanned file, which is by definition not trashed, so IS_TRASHED = 1
- * is itself strong identity evidence. Requiring both columns to disagree (rather than
- * either) means a single-column MediaProvider rewrite is survivable while a real foreign
- * file — which essentially never matches both name and size by chance — still trips it.
+ * id points at a newly-scanned file, which in practice is not trashed (a fresh scan carries
+ * no `.trashed-` prefix and has had no explicit trash request applied to it), so
+ * IS_TRASHED = 1 is itself strong identity evidence. Requiring both columns to disagree
+ * (rather than either) means a single-column MediaProvider rewrite is survivable while a
+ * real foreign file — which essentially never matches both name and size by chance — still
+ * trips it.
  */
 fun resolveRecords(
     local: List<LocalTrashRecord>,

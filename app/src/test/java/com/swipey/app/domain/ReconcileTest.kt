@@ -56,10 +56,12 @@ class ReconcileTest {
 
     /**
      * MediaStore reuses ids after a rescan; a reused id points at a newly-scanned,
-     * untrashed file, so both name AND size disagreeing on an untrashed row means
-     * it is a different file.
+     * untrashed file. The guard requires BOTH name and size to disagree before treating
+     * an untrashed row as a different file — the next two tests pin each single-column
+     * case independently, since without them a `&&` -> `||` regression is caught by
+     * nothing in this suite.
      */
-    @Test fun idReuseDetectedByNameMismatchIsVanished() {
+    @Test fun idReuseWithBothDisplayNameAndSizeMismatchedIsVanished() {
         val r = resolve(
             listOf(record(1, TrashState.TRASHED, name = "old.jpg", size = 100)),
             listOf(live(1, false, name = "different.jpg", size = 999)),
@@ -67,12 +69,20 @@ class ReconcileTest {
         assertEquals(listOf(Resolution.Vanished(1)), r)
     }
 
-    @Test fun idReuseDetectedBySizeMismatchIsVanished() {
+    @Test fun untrashedRowAgreeingOnSizeAloneIsNotTreatedAsIdReuse() {
         val r = resolve(
             listOf(record(1, TrashState.TRASHED, name = "old.jpg", size = 100)),
-            listOf(live(1, false, name = "different.jpg", size = 999)),
+            listOf(live(1, false, name = "different.jpg", size = 100)),
         )
-        assertEquals(listOf(Resolution.Vanished(1)), r)
+        assertEquals(listOf(Resolution.DeleteRecordAndReview(1)), r)
+    }
+
+    @Test fun untrashedRowAgreeingOnNameAloneIsNotTreatedAsIdReuse() {
+        val r = resolve(
+            listOf(record(1, TrashState.TRASHED, name = "old.jpg", size = 100)),
+            listOf(live(1, false, name = "old.jpg", size = 999)),
+        )
+        assertEquals(listOf(Resolution.DeleteRecordAndReview(1)), r)
     }
 
     // --- Safety net: MediaProvider legitimately rewrites DISPLAY_NAME and/or SIZE on a
@@ -123,6 +133,30 @@ class ReconcileTest {
     @Test fun pendingTrashRowWithRenamedDisplayNameAndCorrectedSizeIsNotDiscarded() {
         val r = resolve(
             listOf(record(1, TrashState.PENDING_TRASH, name = "old.jpg", size = 0)),
+            listOf(live(1, true, name = "old (1).jpg", size = 4_096)),
+        )
+        assertEquals(listOf(Resolution.MarkTrashed(1)), r)
+    }
+
+    @Test fun pendingRestoreRowWithRenamedDisplayNameIsNotDiscarded() {
+        val r = resolve(
+            listOf(record(1, TrashState.PENDING_RESTORE, name = "old.jpg")),
+            listOf(live(1, true, name = "old (1).jpg")),
+        )
+        assertEquals(listOf(Resolution.MarkTrashed(1)), r)
+    }
+
+    @Test fun pendingRestoreRowWithCorrectedSizeIsNotDiscarded() {
+        val r = resolve(
+            listOf(record(1, TrashState.PENDING_RESTORE, size = 0)),
+            listOf(live(1, true, size = 4_096)),
+        )
+        assertEquals(listOf(Resolution.MarkTrashed(1)), r)
+    }
+
+    @Test fun pendingRestoreRowWithRenamedDisplayNameAndCorrectedSizeIsNotDiscarded() {
+        val r = resolve(
+            listOf(record(1, TrashState.PENDING_RESTORE, name = "old.jpg", size = 0)),
             listOf(live(1, true, name = "old (1).jpg", size = 4_096)),
         )
         assertEquals(listOf(Resolution.MarkTrashed(1)), r)
