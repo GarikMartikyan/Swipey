@@ -13,11 +13,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,12 +30,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.swipey.app.domain.MediaAccess
 import com.swipey.app.domain.resolveMediaAccess
 import com.swipey.app.ui.common.Copy
+import com.swipey.app.ui.design.SwipeyButton
+import com.swipey.app.ui.design.SwipeyScreen
+import com.swipey.app.ui.design.SwipeySpacing
+import com.swipey.app.ui.design.SwipeyText
+import com.swipey.app.ui.design.SwipeyTheme
 
 private fun granted(context: Context, permission: String): Boolean =
     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
@@ -129,15 +138,49 @@ fun PermissionGate(content: @Composable () -> Unit) {
     }
 }
 
+/**
+ * All three gate states share this shape: centred, one heading, one paragraph, one
+ * filled action, and nothing else at all.
+ *
+ * The wording is [Copy]'s, verbatim — the partial-access text in particular is making a
+ * genuine promise about what Swipey cannot guarantee, so it is typeset to be read rather
+ * than shortened. Generous space and a measure capped at 420dp do that work; on a tablet
+ * an uncapped line would run to 90-odd characters and stop being a sentence anyone reads.
+ */
 @Composable
 private fun Message(title: String, body: String, action: String, onAction: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall)
-        Text(body, Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = onAction) { Text(action) }
+    SwipeyScreen {
+        Column(
+            Modifier
+                .fillMaxSize()
+                // The gate is the one screen a user can meet at a 200% font scale before
+                // they have granted anything; it must never trap its own button offscreen.
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = SwipeySpacing.xxl),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            SwipeyText(
+                title,
+                modifier = Modifier.widthIn(max = 420.dp),
+                style = SwipeyTheme.typography.title,
+                color = SwipeyTheme.colors.textPrimary,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(SwipeySpacing.md))
+            SwipeyText(
+                body,
+                modifier = Modifier.widthIn(max = 420.dp),
+                style = SwipeyTheme.typography.body,
+                color = SwipeyTheme.colors.textSecondary,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(SwipeySpacing.xxl))
+            SwipeyButton(
+                text = action,
+                onClick = onAction,
+                modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+            )
+        }
     }
 }

@@ -150,4 +150,54 @@ object Copy {
 
     /** Fix round 2, Critical 2: the restore-side equivalent of [COMMIT_FAILED]. */
     const val RESTORE_FAILED = "Couldn't restore those items. Nothing was changed — try again."
+
+    // -----------------------------------------------------------------------
+    // Progressive disclosure
+    // -----------------------------------------------------------------------
+    //
+    // The seven rules above are binding, but stacking them as four caveat
+    // paragraphs under every screen was the least readable thing in the app.
+    // The fix is disclosure, not deletion: one plain line on screen, the full
+    // text one tap away in a sheet. Nothing here replaces a note above — the
+    // long forms are all still shown verbatim, via `ui/common/DisclosureSheet.kt`,
+    // which is the single place that decides which notes a screen carries.
+
+    /**
+     * Review's and Result's on-screen line.
+     *
+     * Rule 1 ("moved to trash", never "deleted") and rule 3: "about a month" is
+     * hedged on purpose — the headline must not promise a hard deadline, and the
+     * precise, per-item minimum is [expiresAtLeast] plus [TRASH_SIZE_NOTE] behind
+     * the ⓘ. It also says nothing about space, so it cannot be read as rule 2's
+     * "you got these bytes back".
+     */
+    const val TRASH_SHORT_NOTE = "Moved to trash · recoverable for about a month"
+
+    /**
+     * The Bin's on-screen line. Rules 1 and 7 in one breath; rules 4 and 5 —
+     * whose trash it is, and that Android asks again — sit behind the ⓘ.
+     */
+    const val BIN_SHORT_NOTE = "In your phone's trash · nothing here is deleted"
+
+    /** Label and accessible name for the ⓘ that opens the full disclosure. */
+    const val DISCLOSURE_ACTION = "What this means"
+    const val DISCLOSURE_TITLE = "What happens to your photos"
+    const val DISCLOSURE_DISMISS = "Got it"
+
+    /**
+     * Result's outcome line. Pairs with the large numeral above it; the audited
+     * sentence [resultTitle] is what a screen reader is given for the pair, so
+     * the count is never announced twice. See `ResultScreen`.
+     */
+    const val RESULT_OUTCOME_LINE = "items moved to trash"
+
+    /** Marks the active choice in the sort chooser. */
+    const val SELECTED = "Selected"
+
+    /** The tap action on a Review thumbnail — never "delete", it only unmarks. */
+    const val REVIEW_UNMARK = "Remove from this list"
+
+    /** The tap action on a Bin thumbnail, either way round. */
+    const val BIN_SELECT = "Select"
+    const val BIN_DESELECT = "Deselect"
 }
