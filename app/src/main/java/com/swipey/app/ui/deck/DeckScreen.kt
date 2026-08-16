@@ -73,10 +73,14 @@ fun DeckScreen(
 
 @Composable
 fun MediaCardContent(item: com.swipey.app.domain.MediaItem) {
-    coil3.compose.AsyncImage(
-        model = com.swipey.app.data.contentUriFor(item.id, item.isVideo),
-        contentDescription = item.displayName,
-        modifier = Modifier.fillMaxSize(),
-        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-    )
+    if (item.isVideo) {
+        VideoCard(item)
+    } else {
+        coil3.compose.AsyncImage(
+            model = com.swipey.app.data.contentUriFor(item.id, item.isVideo),
+            contentDescription = item.displayName,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+        )
+    }
 }
