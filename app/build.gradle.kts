@@ -38,4 +38,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
     testImplementation(libs.junit)
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }
