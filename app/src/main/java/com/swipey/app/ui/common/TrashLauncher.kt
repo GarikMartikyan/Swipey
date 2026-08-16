@@ -6,9 +6,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.swipey.app.data.RecoveryReport
 import com.swipey.app.data.TrashRepository
 import kotlinx.coroutines.CoroutineScope
@@ -19,15 +23,41 @@ import kotlinx.coroutines.launch
  *
  * RESULT_OK is never trusted (spec §8): PermissionActivity sets it unconditionally.
  * The truth comes from TrashRepository.verifyAndResolve().
+ *
+ * F3: `queue`/`index`/`inFlight` are backed by the caller's [MutableState]s (in practice
+ * [rememberSaveable] ones from [rememberTrashLauncher]) rather than plain fields, so a
+ * fresh `TrashLauncher` built after Activity recreation (rotation, or process death +
+ * restore) picks up exactly where the previous instance left off, instead of resetting
+ * to an empty queue. `ActivityResultRegistry` persists its pending request across that
+ * same recreation and will still deliver a result into whichever `TrashLauncher` exists
+ * when it does — without this, that delivery would land on a reset queue and silently
+ * drop every chunk after the one already approved, while still reporting a clean finish.
  */
 class TrashLauncher(
     private val repository: TrashRepository,
     private val scope: CoroutineScope,
     private val launch: (IntentSenderRequest) -> Unit,
     private val onFinished: (RecoveryReport) -> Unit,
+    private val queueState: MutableState<List<PendingIntent>>,
+    private val indexState: MutableState<Int>,
+    private val inFlightState: MutableState<Boolean>,
 ) {
-    private var queue: List<PendingIntent> = emptyList()
-    private var index = 0
+    private var queue: List<PendingIntent>
+        get() = queueState.value
+        set(value) { queueState.value = value }
+    private var index: Int
+        get() = indexState.value
+        set(value) { indexState.value = value }
+
+    // F2: nothing previously guarded re-entry into start() — a second tap mid-sequence
+    // (e.g. a slow prepareTrash/prepareRestore round-trip before the first dialog even
+    // appears) would reset queue/index under an in-flight sequence and could launch two
+    // overlapping consent-dialog chains against the same records. inFlight makes start()
+    // a no-op while a sequence is running, cleared on every terminal path (both the
+    // empty-queue branch and finish()) so a stuck flag can never wedge the launcher.
+    private var inFlight: Boolean
+        get() = inFlightState.value
+        set(value) { inFlightState.value = value }
 
     /**
      * Task 10 review finding: an empty [requests] list previously left `launchNext()`
@@ -37,10 +67,12 @@ class TrashLauncher(
      * is handled here directly rather than relying on every caller to check first.
      */
     fun start(requests: List<PendingIntent>) {
+        if (inFlight) return
+        inFlight = true
         queue = requests
         index = 0
         if (queue.isEmpty()) {
-            scope.launch { onFinished(repository.verifyAndResolve()) }
+            scope.launch { finish(repository.verifyAndResolve()) }
         } else {
             launchNext()
         }
@@ -56,16 +88,27 @@ class TrashLauncher(
         if (index < queue.size) {
             launchNext()
         } else {
-            onFinished(repository.verifyAndResolve())
+            finish(repository.verifyAndResolve())
         }
     }
 
     /** User cancelled: stop launching further chunks, but still verify what did land. */
     suspend fun onCancelled() {
         index = queue.size
-        onFinished(repository.verifyAndResolve())
+        finish(repository.verifyAndResolve())
+    }
+
+    private fun finish(report: RecoveryReport) {
+        inFlight = false
+        onFinished(report)
     }
 }
+
+/** F3: PendingIntent is Parcelable; ArrayList<Parcelable> is Bundle-compatible. */
+private val PendingIntentListSaver: Saver<List<PendingIntent>, ArrayList<PendingIntent>> = Saver(
+    save = { ArrayList(it) },
+    restore = { it.toList() },
+)
 
 /**
  * Wires an ActivityResultLauncher for StartIntentSenderForResult to a [TrashLauncher].
@@ -109,12 +152,22 @@ fun rememberTrashLauncher(
         }
     }
 
+    // F3: rememberSaveable, not remember — see the class doc for why.
+    val queueState = rememberSaveable(stateSaver = PendingIntentListSaver) {
+        mutableStateOf<List<PendingIntent>>(emptyList())
+    }
+    val indexState = rememberSaveable { mutableStateOf(0) }
+    val inFlightState = rememberSaveable { mutableStateOf(false) }
+
     return remember(repository) {
         TrashLauncher(
             repository = repository,
             scope = scope,
             launch = { request -> activityLauncher.launch(request) },
             onFinished = { report -> currentOnFinished.value(report) },
+            queueState = queueState,
+            indexState = indexState,
+            inFlightState = inFlightState,
         ).also { holder[0] = it }
     }
 }
