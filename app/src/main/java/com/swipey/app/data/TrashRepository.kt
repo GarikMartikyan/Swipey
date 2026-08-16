@@ -1,7 +1,11 @@
 package com.swipey.app.data
 
+import android.Manifest
 import android.app.PendingIntent
 import android.content.ContentResolver
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.MediaStore
 import com.swipey.app.data.db.ReviewedMediaEntity
 import com.swipey.app.data.db.SwipeyDatabase
@@ -9,11 +13,13 @@ import com.swipey.app.data.db.TrashedItemEntity
 import com.swipey.app.data.db.toDomain
 import com.swipey.app.domain.BinView
 import com.swipey.app.domain.LocalTrashRecord
+import com.swipey.app.domain.MediaAccess
 import com.swipey.app.domain.MediaItem
 import com.swipey.app.domain.Resolution
 import com.swipey.app.domain.TrashState
 import com.swipey.app.domain.chunkedForRequest
 import com.swipey.app.domain.reconcileBin
+import com.swipey.app.domain.resolveMediaAccess
 import com.swipey.app.domain.resolveRecords
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,6 +36,7 @@ data class RecoveryReport(
 }
 
 class TrashRepository(
+    private val context: Context,
     private val resolver: ContentResolver,
     private val media: MediaRepository,
     private val db: SwipeyDatabase,
@@ -75,13 +82,40 @@ class TrashRepository(
         }
 
     /**
-     * The spec §8.1 recovery pass. Safe to call at any time — on app start, on Bin
-     * open, and after every consent dialog result. RESULT_OK is never trusted;
-     * this is what decides what actually happened.
+     * I1: collapses markPendingTrash + buildTrashRequests into one suspend call so the
+     * PendingIntent cannot be obtained before the durable row is committed. A caller that
+     * calls the two steps separately from a non-coroutine call site (e.g. a Compose
+     * onClick) has no compiler-enforced ordering between them — this does.
+     */
+    suspend fun prepareTrash(items: List<MediaItem>, now: Long): List<PendingIntent> {
+        markPendingTrash(items, now)
+        return buildTrashRequests(items)
+    }
+
+    /** Same guarantee as [prepareTrash], for the restore direction. */
+    suspend fun prepareRestore(records: List<LocalTrashRecord>): List<PendingIntent> {
+        markPendingRestore(records.map { it.mediaId })
+        return buildRestoreRequests(records)
+    }
+
+    /**
+     * The spec §8.1 recovery pass. Safe to call at any time the app currently holds full
+     * media access — on app start, on Bin open, and after every consent dialog result.
+     * RESULT_OK is never trusted; this is what decides what actually happened.
+     *
+     * Precondition, not a blanket guarantee: without READ_MEDIA_IMAGES + READ_MEDIA_VIDEO
+     * (e.g. permission revoked in Settings after items were trashed, then Swipey relaunched)
+     * MediaProvider throws SecurityException on the verification query. Without a guard,
+     * every local record would have no live row to match, resolve to Vanished, and be
+     * deleted — destroying the only pointer back to files that are still sitting in the
+     * system trash. So this returns an untouched, empty report instead of querying at all
+     * when access isn't FULL. Spec §8.1, review finding I4.
      */
     suspend fun verifyAndResolve(): RecoveryReport = withContext(Dispatchers.IO) {
+        if (!hasFullMediaAccess()) return@withContext EMPTY_RECOVERY_REPORT
+
         val local = db.trashed().all().map { it.toDomain() }
-        if (local.isEmpty()) return@withContext RecoveryReport(emptyList(), emptyList(), emptyList(), emptyList())
+        if (local.isEmpty()) return@withContext EMPTY_RECOVERY_REPORT
 
         val live = liveRowsFor(local)
         val resolutions = resolveRecords(local, live)
@@ -107,7 +141,10 @@ class TrashRepository(
         RecoveryReport(confirmed, restored, declined, vanished)
     }
 
+    /** Same I4 exposure as [verifyAndResolve] — [reconcileBin] also queries live rows. */
     suspend fun binView(): BinView = withContext(Dispatchers.IO) {
+        if (!hasFullMediaAccess()) return@withContext BinView(emptyList(), emptyList())
+
         val local = db.trashed().all().map { it.toDomain() }
         reconcileBin(local, liveRowsFor(local))
     }
@@ -117,4 +154,25 @@ class TrashRepository(
     private suspend fun liveRowsFor(local: List<LocalTrashRecord>) =
         media.verify(local.filter { !it.isVideo }.map { it.mediaId }, isVideo = false) +
             media.verify(local.filter { it.isVideo }.map { it.mediaId }, isVideo = true)
+
+    /**
+     * Reuses domain.resolveMediaAccess (Task 6) rather than duplicating its FULL/PARTIAL/
+     * DENIED logic. Cannot reuse ui.permission.PermissionGate.currentMediaAccess directly:
+     * that would make data/ depend on ui/, the wrong direction for this layering, so the
+     * Manifest-permission plumbing below is intentionally kept local and small instead.
+     */
+    private fun hasFullMediaAccess(): Boolean {
+        fun granted(permission: String) =
+            context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+        return resolveMediaAccess(
+            imagesGranted = granted(Manifest.permission.READ_MEDIA_IMAGES),
+            videoGranted = granted(Manifest.permission.READ_MEDIA_VIDEO),
+            userSelectedGranted = Build.VERSION.SDK_INT >= 34 &&
+                granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED),
+        ) == MediaAccess.FULL
+    }
+
+    private companion object {
+        val EMPTY_RECOVERY_REPORT = RecoveryReport(emptyList(), emptyList(), emptyList(), emptyList())
+    }
 }
