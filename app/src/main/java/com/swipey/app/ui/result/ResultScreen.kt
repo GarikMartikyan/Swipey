@@ -35,11 +35,18 @@ fun ResultScreen(
 
         Text(Copy.TRASH_SIZE_NOTE, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
         Text(Copy.SYSTEM_TRASH_NOTE, style = MaterialTheme.typography.bodySmall)
+        // F8(a): rule 7 was present on Review and Bin but absent here — exactly the
+        // screen where a user who just binned things is likeliest to ask "for good?".
+        Text(Copy.NO_PERMANENT_DELETE_NOTE, style = MaterialTheme.typography.bodySmall)
 
         // Spec §9 rule 6 — honest per-item reporting, never blanket success.
         if (report.declined.isNotEmpty()) {
+            // F6: the denominator must be every id this commit attempted, not just
+            // confirmed + declined — otherwise items that vanished mid-commit quietly
+            // shrink "of M" below the actual request size.
+            val attempted = report.confirmedTrashed.size + report.declined.size + report.vanished.size
             Text(
-                Copy.cancelled(report.confirmedTrashed.size, report.confirmedTrashed.size + report.declined.size),
+                Copy.cancelled(report.confirmedTrashed.size, attempted),
                 Modifier.padding(top = 8.dp),
             )
         }
@@ -47,7 +54,9 @@ fun ResultScreen(
             Text(Copy.vanishedNotice(report.vanished.size), Modifier.padding(top = 8.dp))
         }
 
-        Button(onClick = onBin, modifier = Modifier.padding(top = 24.dp)) { Text(Copy.BIN_TITLE) }
-        TextButton(onClick = onHome) { Text("Done") }
+        // F8(c): RESULT_VIEW_BIN, not BIN_TITLE — "Bin" alone reads as the verb here.
+        Button(onClick = onBin, modifier = Modifier.padding(top = 24.dp)) { Text(Copy.RESULT_VIEW_BIN) }
+        // F8(b): was a hardcoded "Done" string; now lives in Copy.kt like everything else.
+        TextButton(onClick = onHome) { Text(Copy.RESULT_DONE) }
     }
 }

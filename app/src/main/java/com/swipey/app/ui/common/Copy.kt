@@ -52,8 +52,14 @@ object Copy {
     fun reviewHeader(count: Int, size: String) = "$count items · $size"
     fun reviewAction(count: Int) = "Move $count items to trash"
 
-    /** Rule 2: this says where the bytes went, not that they came back. */
-    const val TRASH_SIZE_NOTE = "Space is freed when the trash is emptied, about 30 days from now."
+    /**
+     * Rule 2: this says where the bytes went, not that they came back.
+     * Rule 3 (F5): deliberately states no timeframe. MediaProvider's expiry is
+     * per-item and the trash can be emptied sooner (by the user, Google Photos, or
+     * Files — see SYSTEM_TRASH_NOTE) or later than any fixed number promised here;
+     * expiresAtLeast() carries the honest, per-item minimum instead.
+     */
+    const val TRASH_SIZE_NOTE = "Space is freed when the trash is emptied, not now."
     /** Rule 4. */
     const val SYSTEM_TRASH_NOTE =
         "This is your phone's trash, shared with Google Photos and Files. " +
@@ -68,11 +74,22 @@ object Copy {
 
     fun resultTitle(count: Int) = "$count items moved to trash"
     fun expiresAtLeast(date: String) = "Recoverable until at least $date"
+    /** F6: [total] must be every id the commit attempted — confirmed + declined + vanished. */
     fun cancelled(done: Int, total: Int) = "Stopped after $done of $total items"
+
+    // F8(c): distinct from BIN_TITLE — on ResultScreen, right after items were just binned,
+    // a bare "Bin" label reads ambiguously as the verb (throw away) rather than the
+    // navigate-to-Bin destination it actually is.
+    const val RESULT_VIEW_BIN = "View Bin"
+    // F8(b): was hardcoded at the ResultScreen call site, breaking this file's own
+    // invariant that all user-facing copy lives here.
+    const val RESULT_DONE = "Done"
 
     const val BIN_TITLE = "Bin"
     const val BIN_EMPTY = "Nothing here"
     const val BIN_RESTORE = "Restore"
+    /** F8(b): was composed at the BinScreen call site ("${BIN_RESTORE} ${count}"). */
+    fun binRestoreAction(count: Int) = "Restore $count"
     fun binOtherItems(count: Int) = "$count other items are in your phone's trash, put there by other apps."
     fun vanishedNotice(count: Int) = "$count items are no longer in the trash."
 
