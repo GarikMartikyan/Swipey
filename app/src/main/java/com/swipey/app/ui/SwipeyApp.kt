@@ -141,7 +141,23 @@ fun SwipeyRoot(app: SwipeyApp) {
                 val sortArg = backStackEntry.arguments?.getString("sort") ?: "NEWEST"
                 val shuffleArg = backStackEntry.arguments?.getBoolean("shuffle") ?: false
 
-                LaunchedEffect(bucketIdArg, sortArg, shuffleArg) {
+                // Fix round 2 re-review, Critical 1 residue: this must run inside `remember`,
+                // during composition, NOT inside a `LaunchedEffect`. `load()`'s synchronous
+                // `_state` reset (DeckViewModel.kt) only closes the race if it lands before
+                // `DeckScreen` below ever reads the ViewModel's StateFlow — and
+                // `collectAsStateWithLifecycle` seeds its `State` from `flow.value` at the
+                // moment DeckScreen itself composes. A `LaunchedEffect` here is an *effect*:
+                // it is enqueued onto the same AndroidUiDispatcher trampoline as
+                // `collectAsStateWithLifecycle`'s own collector, and — because DeckScreen's
+                // terminal `LaunchedEffect(state.exhausted, state.markedCount)` is registered
+                // first (it composes before the queued reset is drained) — it can read the
+                // *previous* Deck entry's stale, possibly-exhausted-with-marks state and
+                // bounce straight to Review before this reset ever takes effect (Sequence A).
+                // `remember`'s initializer, unlike an effect, runs inline as this composable
+                // executes — strictly before `DeckScreen(...)` below is even called — so by
+                // the time DeckScreen composes and seeds its collected `State`, the reset has
+                // already landed.
+                remember(bucketIdArg, sortArg, shuffleArg) {
                     deckViewModel.load(
                         bucketId = bucketIdArg.takeIf { it != -1L },
                         sort = SortMode.valueOf(sortArg),
@@ -201,7 +217,12 @@ fun SwipeyRoot(app: SwipeyApp) {
                 // `inFlight` across an Activity recreation and latch true forever, since
                 // nothing anywhere caught the exception that could also leave it stuck).
                 var preparing by remember { mutableStateOf(false) }
-                var commitError by remember { mutableStateOf<String?>(null) }
+                // Fix round 2 re-review, Minor: `rememberSaveable`, not plain `remember` —
+                // unlike `preparing` (a genuinely sub-second window where losing it fails
+                // safe), this is the terminal outcome of a failed commit. A rotation while
+                // it's on screen must not silently erase the only record that the commit
+                // failed and leave a live Commit button with no explanation.
+                var commitError by rememberSaveable { mutableStateOf<String?>(null) }
                 val scope = rememberCoroutineScope()
 
                 val trashLauncher = rememberTrashLauncher(

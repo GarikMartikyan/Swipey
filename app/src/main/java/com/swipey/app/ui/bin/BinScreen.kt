@@ -139,7 +139,19 @@ fun BinScreen(viewModel: BinViewModel) {
             // handler returns — beginRestore() is a suspend Room write + binder round
             // trip before the dialog even appears, during which state.selected is
             // otherwise unchanged and a second tap would start a second sequence.
-            enabled = state.selected.isNotEmpty() && !state.restoring,
+            //
+            // Fix round 2 re-review, restore-side latch: `state.restoring` alone is not
+            // enough. The catch block above resets `restoring` on any throw out of
+            // `trashLauncher.start(...)`, but if that throw happened *after* `start()`
+            // already flipped `inFlight = true` (e.g. `launchNext()`'s
+            // `activityLauncher.launch(request)` itself throwing), nothing outside
+            // TrashLauncher can ever clear `inFlight` again — a retry's `start()` would
+            // then be a silent no-op at `if (inFlight) return`, latching `restoring` true
+            // forever with no dialog and no callback to reset it. Deriving `enabled` from
+            // both flags, mirroring the trash side's `committing = preparing ||
+            // trashLauncher.inFlight` (SwipeyApp.kt), closes that gap: the button cannot
+            // re-enable while a stuck `inFlight` would make a retry a no-op.
+            enabled = state.selected.isNotEmpty() && !state.restoring && !trashLauncher.inFlight,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {
             // F8(b): was composed at this call site; now lives in Copy.kt.
