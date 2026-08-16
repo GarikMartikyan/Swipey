@@ -8,3 +8,6 @@ local.properties
 
 # macOS
 .DS_Store
+
+# SDD workspace
+.superpowers/
