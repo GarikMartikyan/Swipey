@@ -24,12 +24,13 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
-    // ui/design/ is built on foundation + animation only. They already arrived
-    // transitively via material3; declared directly so the design system keeps compiling
-    // once the screens stop importing material3 and that dependency goes away.
+    // The whole app is built on foundation + animation. Material3 used to arrive here and
+    // carry these transitively; the last three widgets that needed it (SwipeyApp.kt's
+    // Button, CircularProgressIndicator and Text) are now Swipey primitives, so the
+    // dependency is gone — which makes "no Material in ui/" a fact about the classpath
+    // rather than a convention someone has to remember.
     implementation(libs.compose.foundation)
     implementation(libs.compose.animation)
-    implementation(libs.compose.material3)
     // Renders the @Preview catalogue in ui/design/Previews.kt. Debug only — it is a
     // developer tool and has no business in a release build.
     debugImplementation(libs.compose.ui.tooling)

@@ -122,11 +122,16 @@ fun ReviewScreen(
             }
 
             if (commitError != null) {
+                // textPrimary rather than an accent: the palette carries no alarm colour,
+                // deliberately, and `bin` is now a neutral one step from the caption grey
+                // this line sits next to — which would make the one message on this screen
+                // that must be noticed the quietest thing on it. Full contrast is the
+                // signal.
                 SwipeyText(
                     commitError,
                     modifier = Modifier.padding(top = SwipeySpacing.md),
                     style = SwipeyTheme.typography.body,
-                    color = SwipeyTheme.colors.bin,
+                    color = SwipeyTheme.colors.textPrimary,
                 )
             }
 
@@ -224,7 +229,11 @@ private fun MarkedTile(
                 .padding(SwipeySpacing.xs)
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(SwipeyTheme.colors.scrim),
+                // Dark-palette scrim in both themes, for the same reason as the ink: the
+                // ground is a photograph, not the page. The light palette's scrim is a
+                // 40% veil tuned to dim a near-white canvas, and it is not enough black
+                // to make a white glyph legible over a sunlit image.
+                .background(SwipeyDarkColors.scrim),
             contentAlignment = Alignment.Center,
         ) {
             SwipeyIcon(
@@ -243,13 +252,17 @@ private fun MarkedTile(
     }
 }
 
-/** A scrim-backed pill for the one number that belongs on a thumbnail. */
+/**
+ * A scrim-backed pill for the one number that belongs on a thumbnail.
+ *
+ * Dark-palette scrim and ink in both themes — the ground is a photograph.
+ */
 @Composable
 private fun TileCaption(text: String, modifier: Modifier = Modifier) {
     Box(
         modifier
             .clip(RoundedCornerShape(SwipeyRadius.pill))
-            .background(SwipeyTheme.colors.scrim)
+            .background(SwipeyDarkColors.scrim)
             .padding(horizontal = SwipeySpacing.sm, vertical = SwipeySpacing.xs),
     ) {
         SwipeyText(

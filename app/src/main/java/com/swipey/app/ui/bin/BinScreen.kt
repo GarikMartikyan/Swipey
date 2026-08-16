@@ -318,7 +318,11 @@ private fun BinTile(
                 .padding(SwipeySpacing.xs)
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(if (selected) colors.keep else colors.scrim),
+                // Dark-palette scrim in both themes, matching the ink below it: the
+                // ground here is a photograph, and the light palette's 40% veil — tuned
+                // to dim a near-white page — is not enough black to carry a white tick
+                // over a sunlit image.
+                .background(if (selected) colors.keep else SwipeyDarkColors.scrim),
             contentAlignment = Alignment.Center,
         ) {
             if (selected) {
@@ -337,7 +341,7 @@ private fun BinTile(
                 .align(Alignment.BottomStart)
                 .padding(SwipeySpacing.xs)
                 .clip(RoundedCornerShape(SwipeyRadius.pill))
-                .background(colors.scrim)
+                .background(SwipeyDarkColors.scrim)
                 .padding(horizontal = SwipeySpacing.sm, vertical = SwipeySpacing.xs),
         ) {
             SwipeyText(

@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -82,8 +83,9 @@ import androidx.compose.ui.window.DialogProperties
  *    with the user's font-scale setting instead of clipping its own label.
  *  - **Press feedback** is an explicit scale-and-dim, not a ripple. `indication = null`
  *    everywhere; nothing here depends on Material's `LocalIndication`.
- *  - **Disabled** means the click is gone *and* the content is dimmed to
- *    [SwipeyDisabledAlpha]. Never one without the other.
+ *  - **Disabled** means the click is gone, the content is dimmed to
+ *    [SwipeyDisabledAlpha], *and* the control drops its ring. Never one without the
+ *    others — see [SwipeyDisabledAlpha] for why opacity alone is not enough here.
  */
 
 // ---------------------------------------------------------------------------
@@ -95,15 +97,24 @@ import androidx.compose.ui.window.DialogProperties
  *
  * Swipey has exactly two decisions — keep and bin — and everything else is navigation.
  * Tone maps a control onto that: colour is never chosen at a call site, only a meaning.
+ *
+ * ### Four properties, not one
+ * A tone used to resolve to a single colour. It resolves to four now — a [container], an
+ * [onContainer], a [ring] and a [ground] — because [SwipeyColors.bin] is a neutral with
+ * the same value as [SwipeyColors.textSecondary], and a control whose only distinguishing
+ * feature is a grey glyph is indistinguishable from a caption, and from a disabled
+ * control. The bin control earns its "I am a target" reading from *treatment* rather than
+ * hue: a filled ground and a ring in its own colour, both of which static text never has
+ * and a disabled control loses.
  */
 enum class SwipeyTone {
     /** Navigation, confirmation, dismissal. Renders as inverted ink — no hue at all. */
     Neutral,
 
-    /** Keeping a photo. */
+    /** Keeping a photo. The palette's one accent, and the only place it appears. */
     Keep,
 
-    /** Binning a photo, and committing a batch to the system trash. */
+    /** Binning a photo, and committing a batch to the system trash. A neutral. */
     Bin,
 }
 
@@ -130,7 +141,12 @@ private fun SwipeyTone.container(): Color = when (this) {
 @Composable
 private fun SwipeyTone.onContainer(): Color = when (this) {
     SwipeyTone.Neutral -> SwipeyTheme.colors.canvas
-    SwipeyTone.Keep, SwipeyTone.Bin -> SwipeyTheme.colors.onAccent
+    SwipeyTone.Keep -> SwipeyTheme.colors.onAccent
+    // A mid neutral is the one fill whose legible ink flips between the palettes: white
+    // clears 5.0:1 on the light theme's #6B7076, but only 3.2:1 on the dark theme's
+    // #8B9097, where near-black clears 6.0:1 instead. Precisely the case
+    // [SwipeyColors.isDark] exists for.
+    SwipeyTone.Bin -> with(SwipeyTheme.colors) { if (isDark) canvas else onAccent }
 }
 
 /** The ink on a [SwipeyButtonVariant.Ghost] control of this tone. */
@@ -140,6 +156,47 @@ private fun SwipeyTone.ink(): Color = when (this) {
     SwipeyTone.Keep -> SwipeyTheme.colors.keep
     SwipeyTone.Bin -> SwipeyTheme.colors.bin
 }
+
+/**
+ * The ring around an **enabled** [SwipeyButtonVariant.Ghost] control of this tone.
+ *
+ * Neutral keeps the ordinary hairline: its ink is [SwipeyColors.textPrimary], which is
+ * already the loudest thing in the palette and needs no help being noticed. The two
+ * decision tones ring themselves in their own colour instead — for Keep that is a
+ * flourish, for Bin it is the whole affordance. A disabled control has no ring at all;
+ * see [SwipeyDisabledAlpha].
+ */
+@Composable
+private fun SwipeyTone.ring(): Color = when (this) {
+    SwipeyTone.Neutral -> SwipeyTheme.colors.hairline
+    SwipeyTone.Keep -> SwipeyTheme.colors.keep
+    SwipeyTone.Bin -> SwipeyTheme.colors.bin
+}
+
+/**
+ * The ground behind a [SwipeyButtonVariant.Ghost] control of this tone.
+ *
+ * Transparent for Neutral, so the app's ordinary secondary buttons stay outlines over the
+ * canvas. The decision tones get [SwipeyColors.surfaceStrong], which is what turns a bin
+ * glyph from a grey mark into an object with edges — and, on the deck, gives both
+ * decisions an opaque disc to sit on over an arbitrarily bright photograph.
+ */
+@Composable
+private fun SwipeyTone.ground(): Color = when (this) {
+    SwipeyTone.Neutral -> Color.Transparent
+    SwipeyTone.Keep, SwipeyTone.Bin -> SwipeyTheme.colors.surfaceStrong
+}
+
+/**
+ * Paints a [SwipeyButtonVariant.Ghost] control's ground and ring.
+ *
+ * The ring is what disappears when [enabled] is false; the ground stays. Both halves of
+ * that are deliberate — see [SwipeyDisabledAlpha].
+ */
+private fun Modifier.ghostSkin(ground: Color, ring: Color, enabled: Boolean, shape: Shape): Modifier =
+    this
+        .then(if (ground == Color.Transparent) Modifier else Modifier.background(ground))
+        .then(if (enabled) Modifier.border(SwipeySize.hairline, ring, shape) else Modifier)
 
 // ---------------------------------------------------------------------------
 // Text
@@ -243,6 +300,9 @@ fun SwipeyButton(
         label = "buttonPress",
     )
     val shape = RoundedCornerShape(SwipeyRadius.pill)
+    val container = tone.container()
+    val ground = tone.ground()
+    val ring = tone.ring()
 
     Row(
         modifier
@@ -251,7 +311,7 @@ fun SwipeyButton(
             // The floor, not the height — see the KDoc above.
             .defaultMinSize(minHeight = SwipeySize.touchMin)
             .clip(shape)
-            .then(if (filled) Modifier.background(tone.container()) else Modifier.border(SwipeySize.hairline, SwipeyTheme.colors.hairline, shape))
+            .then(if (filled) Modifier.background(container) else Modifier.ghostSkin(ground, ring, enabled, shape))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -278,6 +338,11 @@ fun SwipeyButton(
  * three controls under the deck are what this is mostly for: hit one-handed, at speed,
  * where a mis-tap costs a photograph.
  *
+ * In the [SwipeyButtonVariant.Ghost] variant a Keep or Bin control is a **disc**: a
+ * [SwipeyColors.surfaceStrong] ground with a ring in its own tone. That is what stops the
+ * Bin control — whose glyph is a neutral one value away from body copy — from reading as
+ * a label, or as one of its own disabled states. See [SwipeyTone].
+ *
  * @param contentDescription required, and deliberately not nullable. This control has no
  *   visible label, so without it a screen reader announces nothing at all.
  */
@@ -303,12 +368,16 @@ fun SwipeyIconButton(
         label = "iconButtonPress",
     )
 
+    val container = tone.container()
+    val ground = tone.ground()
+    val ring = tone.ring()
+
     Box(
         modifier
             .scale(scale)
             .size(size.coerceAtLeast(SwipeySize.touchMin))
             .clip(CircleShape)
-            .then(if (filled) Modifier.background(tone.container()) else Modifier.border(SwipeySize.hairline, SwipeyTheme.colors.hairline, CircleShape))
+            .then(if (filled) Modifier.background(container) else Modifier.ghostSkin(ground, ring, enabled, CircleShape))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -488,6 +557,13 @@ fun SwipeyRow(
  *
  * When [onClick] is given the *visual* pill stays small but the tap target is padded out
  * to [SwipeySize.touchMin], so a chip never becomes a 30dp target.
+ *
+ * A toned chip carries its hue in the **glyph** and keeps its label at
+ * [SwipeyColors.textPrimary]. Neither decision colour survives being body text in this
+ * palette: `bin` *is* `textSecondary`, so a bin-coloured label would be a caption rather
+ * than a control, and `keep` measures 3.9:1 on `surface` in the dark palette, under the
+ * 4.5:1 a 13sp label needs. The glyph is a non-text element and clears its own 3:1 floor
+ * comfortably, so that is where the colour goes.
  */
 @Composable
 fun SwipeyChip(
@@ -500,11 +576,14 @@ fun SwipeyChip(
     tabular: Boolean = true,
 ) {
     val colors = SwipeyTheme.colors
-    val ink = when (tone) {
+    val glyph = when (tone) {
         SwipeyTone.Neutral -> colors.textSecondary
         SwipeyTone.Keep -> colors.keep
         SwipeyTone.Bin -> colors.bin
     }
+    // See the KDoc: a neutral chip is a caption and reads as one; a toned chip is a
+    // control, and its label goes to full reading contrast so it looks like one.
+    val ink = if (tone == SwipeyTone.Neutral) colors.textSecondary else colors.textPrimary
     val shape = RoundedCornerShape(SwipeyRadius.pill)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -541,7 +620,7 @@ fun SwipeyChip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
-                SwipeyIcon(icon, contentDescription = null, tint = ink, size = 14.dp)
+                SwipeyIcon(icon, contentDescription = null, tint = glyph, size = 14.dp)
             }
             SwipeyText(text, style = style, color = ink, maxLines = 1)
         }

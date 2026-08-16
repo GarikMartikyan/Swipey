@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -162,19 +163,78 @@ private fun ProgressPreview() = PreviewCanvas {
 private fun DividerAndPalettePreview() = PreviewCanvas {
     SwipeyDivider()
     // The palette itself, so a token change is visible as a colour rather than a hex.
+    // Signal is legible at a glance here: one hue in the whole set, and `bin` is the same
+    // swatch as `2nd` beside it — the same hex, not a near-miss.
+    val colors = SwipeyTheme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm)) {
-        val colors = SwipeyTheme.colors
-        listOf(colors.canvas, colors.surface, colors.surfaceStrong, colors.hairline, colors.keep, colors.bin).forEach {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(SwipeyRadius.card))
-                    .background(it)
-                    .border(SwipeySize.hairline, colors.hairline, RoundedCornerShape(SwipeyRadius.card)),
-            )
-        }
+        Swatch("canvas", colors.canvas)
+        Swatch("surface", colors.surface)
+        Swatch("strong", colors.surfaceStrong)
+        Swatch("hairline", colors.hairline)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm)) {
+        Swatch("keep", colors.keep)
+        Swatch("bin", colors.bin)
+        Swatch("2nd", colors.textSecondary)
+        Swatch("off", colors.textDisabled)
     }
     SwipeyDivider()
+}
+
+/** One palette entry, named, so a swatch grid is readable rather than decorative. */
+@Composable
+private fun Swatch(name: String, color: Color) {
+    val shape = RoundedCornerShape(SwipeyRadius.card)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(shape)
+                .background(color)
+                .border(SwipeySize.hairline, SwipeyTheme.colors.hairline, shape),
+        )
+        SwipeyText(
+            name,
+            modifier = Modifier.padding(top = SwipeySpacing.xs),
+            style = SwipeyTheme.typography.label,
+            color = SwipeyTheme.colors.textSecondary,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * The problem this palette creates, and the answer to it — the one preview to check when
+ * anything about a bin control changes.
+ *
+ * `bin` is `textSecondary`, exactly, so nothing about a bin control's *colour* separates
+ * it from a caption or from a disabled control. What separates it is treatment: an
+ * enabled decision control is a ringed disc on a [SwipeyColors.surfaceStrong] ground; a
+ * disabled one keeps the ground, loses the ring, and dims to [SwipeyDisabledAlpha]. The
+ * last two rows are the same sentence in the same grey, so the difference has to be
+ * visible without reading anything.
+ */
+@SwipeyPreviews
+@Composable
+private fun BinAffordancePreview() = PreviewCanvas {
+    SwipeyText("Enabled", style = SwipeyTheme.typography.label, color = SwipeyTheme.colors.textSecondary)
+    Row(horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.xl), verticalAlignment = Alignment.CenterVertically) {
+        SwipeyIconButton(SwipeyIcons.Bin, "Bin this photo", {})
+        SwipeyIconButton(SwipeyIcons.Bin, "Bin this photo", {}, tone = SwipeyTone.Bin)
+        SwipeyIconButton(SwipeyIcons.Undo, "Undo the last decision", {}, size = SwipeySize.touchMin)
+        SwipeyIconButton(SwipeyIcons.Check, "Keep this photo", {}, tone = SwipeyTone.Keep)
+    }
+    SwipeyText("Disabled — ground kept, ring gone", style = SwipeyTheme.typography.label, color = SwipeyTheme.colors.textSecondary)
+    Row(horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.xl), verticalAlignment = Alignment.CenterVertically) {
+        SwipeyIconButton(SwipeyIcons.Bin, "Bin this photo", {}, enabled = false)
+        SwipeyIconButton(SwipeyIcons.Bin, "Bin this photo", {}, tone = SwipeyTone.Bin, enabled = false)
+        SwipeyIconButton(SwipeyIcons.Undo, "Undo the last decision", {}, size = SwipeySize.touchMin, enabled = false)
+        SwipeyIconButton(SwipeyIcons.Check, "Keep this photo", {}, tone = SwipeyTone.Keep, enabled = false)
+    }
+    // Static copy in the bin colour, for the comparison the rows above have to survive.
+    SwipeyText("This caption is the bin colour", style = SwipeyTheme.typography.body, color = SwipeyTheme.colors.bin)
+    SwipeyButton("Move 12 items to trash", {}, tone = SwipeyTone.Bin, fillWidth = true)
+    SwipeyButton("Move 12 items to trash", {}, tone = SwipeyTone.Bin, fillWidth = true, enabled = false)
 }
 
 /**

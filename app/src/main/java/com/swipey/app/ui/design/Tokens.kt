@@ -18,8 +18,16 @@ import androidx.compose.ui.unit.sp
  *
  * Deliberately *not* Material. The app's content is the user's own photographs; every
  * token here exists to keep the interface quiet enough that they stay the loudest thing
- * on screen. That means: a near-black canvas, one accent per action, hairlines instead of
- * elevation, and no shadows anywhere. There is no `MaterialTheme` in the tree.
+ * on screen. That means: a near-black canvas, hairlines instead of elevation, and no
+ * shadows anywhere. There is no `MaterialTheme` in the tree.
+ *
+ * ### Signal
+ * The palette is near-monochrome and carries exactly **one** hue: an electric blue, spent
+ * only on *keep*. There is no red in this file and there is no second accent. Binning is
+ * not a colour at all — it is expressed by dimming and desaturation, because a binned
+ * photo goes to the system trash and comes back from the in-app Bin, and an interface
+ * that flashes a warning at the one action the app exists to make easy is scolding the
+ * user for using it. See [SwipeyColors.bin].
  *
  * Everything is reached through the [SwipeyTheme] object — `SwipeyTheme.colors.keep`,
  * `SwipeyTheme.typography.title` — mirroring the shape Compose users already expect,
@@ -43,10 +51,19 @@ import androidx.compose.ui.unit.sp
  * @property textPrimary body and headings.
  * @property textSecondary supporting copy, counters, timestamps.
  * @property textDisabled the same voice at rest; used for disabled controls.
- * @property keep the "keep this photo" accent. Green, but a cool restrained one.
- * @property bin the "bin this photo" accent. Rose rather than red — the app never
- *   permanently deletes anything, and an alarm-red would overstate what a swipe does.
- * @property onAccent ink that sits legibly on [keep], [bin] or an inverted neutral fill.
+ * @property keep the "keep this photo" accent, and the only hue in the palette. An
+ *   electric blue, spent here and nowhere else — which is what makes a single glimpse of
+ *   it mean "kept" without anything having to say so.
+ * @property bin the "bin this photo" role. A **neutral**, not an accent, and deliberately
+ *   the same value as [textSecondary]: Swipey never destroys anything — a binned photo
+ *   goes to the system trash and is restored from the in-app Bin — so an accent colour
+ *   here would overstate what a swipe does. Binning is expressed by dimming and
+ *   desaturation instead (`ui/deck/SwipeCard.kt`). The cost of that honesty is that a bin
+ *   *control* cannot use hue to look interactive, so it uses treatment instead: see
+ *   [SwipeyTone] for the ring-and-ground that does the job, and [SwipeyDisabledAlpha] for
+ *   what keeps it from reading as disabled.
+ * @property onAccent ink that sits legibly on [keep] or an inverted neutral fill. Not
+ *   automatically the right ink on [bin], which is a mid neutral — see [SwipeyTone].
  * @property scrim the dim behind sheets and dialogs.
  * @property isDark which of the two palettes this is; lets a component branch when a
  *   mirrored value genuinely can't be expressed as a token (e.g. status-bar icons).
@@ -71,48 +88,57 @@ data class SwipeyColors(
  * The primary palette. Swipey is dark-first: a photo shown against near-black reads at
  * its own contrast rather than the interface's.
  *
- * [canvas] is `#0B0B0D` rather than pure black on purpose — true black lets OLED smear
- * on scroll and makes a photo's own black borders disappear into the page.
+ * [canvas] is `#0E0F11` rather than pure black on purpose — true black lets OLED smear
+ * on scroll and makes a photo's own black borders disappear into the page. The whole
+ * neutral ramp is very slightly cool, so the one warm-free blue below is the only thing
+ * on screen that reads as a colour.
+ *
+ * Measured against [canvas]: [textPrimary] 18.4:1, [textSecondary] 6.0:1, [keep] 4.3:1
+ * (it is only ever a fill or a glyph, never body text). [textDisabled] is 3.0:1, which is
+ * the point of it.
  */
 val SwipeyDarkColors = SwipeyColors(
-    canvas = Color(0xFF0B0B0D),
-    surface = Color(0xFF141417),
-    surfaceStrong = Color(0xFF1D1D22),
-    hairline = Color(0xFF26262B),
-    textPrimary = Color(0xFFF5F5F7),
-    textSecondary = Color(0xFF9A9AA2),
-    textDisabled = Color(0xFF5A5A62),
-    keep = Color(0xFF34D399),
-    bin = Color(0xFFFB7185),
-    // Both accents are light colours, so dark ink sits on them.
-    onAccent = Color(0xFF0B0B0D),
-    scrim = Color(0xCC000000),
+    canvas = Color(0xFF0E0F11),
+    surface = Color(0xFF17191C),
+    surfaceStrong = Color(0xFF1F2226),
+    hairline = Color(0xFF24262A),
+    textPrimary = Color(0xFFFAFAFA),
+    textSecondary = Color(0xFF8B9097),
+    textDisabled = Color(0xFF5A5F66),
+    keep = Color(0xFF2F6BFF),
+    // Not a colour decision so much as a refusal to make one — see the property doc.
+    bin = Color(0xFF8B9097),
+    onAccent = Color(0xFFFFFFFF),
+    scrim = Color(0x99000000),
     isDark = true,
 )
 
 /**
- * The daylight mirror. Structurally identical — same roles, same relationships — but the
- * accents are *not* the same hex values.
+ * The daylight mirror. Structurally identical — same roles, same relationships — but
+ * [keep] is *not* the same hex value.
  *
- * `#34D399` and `#FB7185` are tuned to carry a dark ground; on white they measure roughly
- * 1.6:1 and 2.5:1, far under the 4.5:1 that body-size text needs and under the 3:1 a
- * non-text control needs. So the light palette walks both accents several steps darker to
- * the same hues' 600/700 weights, which clear 5:1 against white in both directions —
- * as a fill under white ink, and as ink on white.
+ * `#2F6BFF` is tuned to carry a dark ground; on white it measures 3.2:1, under the 4.5:1
+ * that body-size text needs. The light palette walks it several steps darker to
+ * `#1D51D6`, which clears 6.4:1 against the page in both directions — as a fill under
+ * white ink, and as a glyph on white. [bin] needs no such adjustment for the simple
+ * reason that it is not an accent: it is this palette's [textSecondary], exactly as it is
+ * in the dark one.
+ *
+ * The scrim is lighter here (40% rather than 60%): the ground it dims is a near-white
+ * page, and 60% black over white is a slab rather than a veil.
  */
 val SwipeyLightColors = SwipeyColors(
-    canvas = Color(0xFFFBFBFD),
+    canvas = Color(0xFFFCFCFD),
     surface = Color(0xFFFFFFFF),
-    surfaceStrong = Color(0xFFF2F2F5),
-    hairline = Color(0xFFE4E4E9),
-    textPrimary = Color(0xFF0B0B0D),
-    textSecondary = Color(0xFF6B6B74),
-    textDisabled = Color(0xFFA8A8B0),
-    keep = Color(0xFF047857),
-    bin = Color(0xFFE11D48),
-    // Both accents are dark colours here, so the ink inverts too.
+    surfaceStrong = Color(0xFFF2F3F5),
+    hairline = Color(0xFFE4E5E8),
+    textPrimary = Color(0xFF0E0F11),
+    textSecondary = Color(0xFF6B7076),
+    textDisabled = Color(0xFFA0A4AA),
+    keep = Color(0xFF1D51D6),
+    bin = Color(0xFF6B7076),
     onAccent = Color(0xFFFFFFFF),
-    scrim = Color(0x99000000),
+    scrim = Color(0x66000000),
     isDark = false,
 )
 
@@ -259,7 +285,19 @@ object SwipeySize {
     val icon = 24.dp
 }
 
-/** Opacity applied to a disabled control's content, in place of a separate grey. */
+/**
+ * Opacity applied to a disabled control, in place of a separate grey.
+ *
+ * Opacity on its own is not enough in this palette. [SwipeyColors.bin] is a mid neutral,
+ * so "dimmed" and "at rest" differ along the very axis [SwipeyColors.textDisabled]
+ * already uses, and the user is left guessing which grey means what. A disabled control
+ * therefore also **drops its ring** (see [SwipeyTone]): enabled is a ringed target,
+ * disabled is a bare dimmed glyph.
+ *
+ * It keeps its ground, deliberately. The deck disables all three of its controls for the
+ * length of every fly-off animation, and a ground that vanished and came back would make
+ * the bottom of the screen flicker on each swipe — hundreds of times a session.
+ */
 const val SwipeyDisabledAlpha = 0.38f
 
 // ---------------------------------------------------------------------------
