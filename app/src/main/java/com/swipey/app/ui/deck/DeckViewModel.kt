@@ -10,9 +10,13 @@ import com.swipey.app.domain.SortMode
 import com.swipey.app.domain.SwipeSession
 import com.swipey.app.domain.shuffledWithSeed
 import com.swipey.app.domain.sortedFor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class DeckUiState(
     val loading: Boolean = true,
@@ -34,24 +38,45 @@ class DeckViewModel(
     private val _state = MutableStateFlow(DeckUiState())
     val state: StateFlow<DeckUiState> = _state
 
+    // Serialises the KEEP upsert (swipe) against its delete (undo): both are fired
+    // from independent viewModelScope.launch calls with no ordering guarantee of
+    // their own, and an undo racing ahead of its upsert would leave a stale KEEP row
+    // that silently excludes the photo forever (fix round 1, Important 5a).
+    private val dbMutex = Mutex()
+
     fun load(bucketId: Long?, sort: SortMode, shuffle: Boolean, seed: Long) {
         viewModelScope.launch {
             val kept = db.reviewed().keptIds().toSet()
-            val all = media.queryAll()
-                .filter { it.id !in kept }
-                .filter { bucketId == null || it.bucketId == bucketId }
-            val ordered = if (shuffle) all.shuffledWithSeed(seed) else all.sortedFor(sort)
+            val fetched = media.queryAll()
+            // Filtering/sorting/shuffling up to 20,000 items is pure CPU work; keep it
+            // off Main (fix round 1, Important 4) — queryAll()/keptIds() both resume
+            // on Main after their own IO hop.
+            val ordered = withContext(Dispatchers.Default) {
+                val filtered = fetched
+                    .filter { it.id !in kept }
+                    .filter { bucketId == null || it.bucketId == bucketId }
+                if (shuffle) filtered.shuffledWithSeed(seed) else filtered.sortedFor(sort)
+            }
             session = SwipeSession(ordered)
             publish()
         }
     }
 
-    fun swipe(keep: Boolean) {
+    /**
+     * [itemId] must match the current card. SwipeCard reports the id of the card its
+     * commit animation belongs to; if the deck has already moved on for any reason,
+     * this is a no-op rather than applying the decision to whatever is now current
+     * (fix round 1, Critical 2).
+     */
+    fun swipe(itemId: Long, keep: Boolean) {
+        if (session.current?.id != itemId) return
         val item = if (keep) session.swipeRight() else session.swipeLeft()
         if (keep && item != null) {
             // Persisted immediately so a crash mid-session loses nothing (spec §10).
             viewModelScope.launch {
-                db.reviewed().upsert(ReviewedMediaEntity(item.id, "KEEP", System.currentTimeMillis()))
+                dbMutex.withLock {
+                    db.reviewed().upsert(ReviewedMediaEntity(item.id, "KEEP", System.currentTimeMillis()))
+                }
             }
         }
         publish()
@@ -59,7 +84,7 @@ class DeckViewModel(
 
     fun undo() {
         val undone = session.undo() ?: return
-        viewModelScope.launch { db.reviewed().delete(undone.item.id) }
+        viewModelScope.launch { dbMutex.withLock { db.reviewed().delete(undone.item.id) } }
         publish()
     }
 
