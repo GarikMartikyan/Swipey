@@ -17,6 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,20 +31,36 @@ import coil3.compose.AsyncImage
 import com.swipey.app.data.contentUriFor
 import com.swipey.app.domain.formatBytes
 import com.swipey.app.ui.common.Copy
+import com.swipey.app.ui.common.rememberTrashLauncher
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun BinScreen(viewModel: BinViewModel, onRestore: () -> Unit) {
+fun BinScreen(viewModel: BinViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { viewModel.refresh() }
+
+    // Task 10 review finding: the restore flow must never render ResultScreen (see
+    // BinViewModel.onRestoreFinished for why). It is entirely self-contained here —
+    // launch, verify, and land back on this same Bin, refreshed. There is no
+    // `onRestore` callback for a caller to misroute; Task 20 has nothing to wire wrong.
+    var attemptedIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    val trashLauncher = rememberTrashLauncher(repository = viewModel.repository) { report ->
+        viewModel.onRestoreFinished(attemptedIds, report)
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text(Copy.BIN_TITLE, style = MaterialTheme.typography.headlineSmall)
         Text(Copy.SYSTEM_TRASH_NOTE, style = MaterialTheme.typography.bodySmall)
         Text(Copy.NO_PERMANENT_DELETE_NOTE, style = MaterialTheme.typography.bodySmall)
+
+        state.restoreMessage?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium)
+        }
 
         if (state.vanishedCount > 0) {
             // Ruling R14: vanished covers every non-entry outcome, including items
@@ -98,7 +118,11 @@ fun BinScreen(viewModel: BinViewModel, onRestore: () -> Unit) {
         }
 
         Button(
-            onClick = onRestore,
+            onClick = {
+                val ids = state.selected.toList()
+                attemptedIds = ids
+                scope.launch { trashLauncher.start(viewModel.beginRestore()) }
+            },
             enabled = state.selected.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {

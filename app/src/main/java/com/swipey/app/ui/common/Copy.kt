@@ -75,4 +75,13 @@ object Copy {
     const val BIN_RESTORE = "Restore"
     fun binOtherItems(count: Int) = "$count other items are in your phone's trash, put there by other apps."
     fun vanishedNotice(count: Int) = "$count items are no longer in the trash."
+
+    /**
+     * Rule 6: honest per-item outcome for a restore attempt, shown on the Bin itself.
+     * Restore never routes through Result — a cancelled restore still reports its ids
+     * in RecoveryReport.confirmedTrashed (that field means "currently trashed", not
+     * "just trashed by this action"), so surfacing it via resultTitle()/expiresAtLeast()
+     * would falsely tell the user their restore attempt moved items to trash.
+     */
+    fun restoreOutcome(restored: Int, attempted: Int) = "Restored $restored of $attempted items"
 }
