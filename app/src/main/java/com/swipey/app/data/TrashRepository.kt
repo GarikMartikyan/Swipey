@@ -12,6 +12,7 @@ import com.swipey.app.data.db.SwipeyDatabase
 import com.swipey.app.data.db.TrashedItemEntity
 import com.swipey.app.data.db.toDomain
 import com.swipey.app.domain.BinView
+import com.swipey.app.domain.LiveTrashRow
 import com.swipey.app.domain.LocalTrashRecord
 import com.swipey.app.domain.MediaAccess
 import com.swipey.app.domain.MediaItem
@@ -37,9 +38,18 @@ data class RecoveryReport(
     val restored: List<Long>,
     val declined: List<Long>,
     val vanished: List<Long>,
+    /**
+     * Whole-branch review, I2: rows still inside the PENDING_TRASH grace window — asked
+     * for, not yet confirmed either way. Deliberately separate from [declined]: nothing
+     * was written for these, and a caller must not report them as an outcome. They do
+     * count towards "how many did this commit attempt", which is why ResultScreen adds
+     * them to its denominator (spec §9 rule 6).
+     */
+    val awaiting: List<Long> = emptyList(),
 ) : Serializable {
     val isEmpty: Boolean get() =
-        confirmedTrashed.isEmpty() && restored.isEmpty() && declined.isEmpty() && vanished.isEmpty()
+        confirmedTrashed.isEmpty() && restored.isEmpty() && declined.isEmpty() &&
+            vanished.isEmpty() && awaiting.isEmpty()
 }
 
 class TrashRepository(
@@ -125,12 +135,15 @@ class TrashRepository(
         if (local.isEmpty()) return@withContext EMPTY_RECOVERY_REPORT
 
         val live = liveRowsFor(local)
-        val resolutions = resolveRecords(local, live)
+        val resolutions = resolveRecords(local, live, System.currentTimeMillis())
 
         val confirmed = resolutions.filterIsInstance<Resolution.MarkTrashed>().map { it.mediaId }
         val declined = resolutions.filterIsInstance<Resolution.DeleteRecord>().map { it.mediaId }
         val restored = resolutions.filterIsInstance<Resolution.DeleteRecordAndReview>().map { it.mediaId }
         val vanished = resolutions.filterIsInstance<Resolution.Vanished>().map { it.mediaId }
+        // I2: reported, never written. AwaitingConsent maps to no DB call at all — that is
+        // the entire point of the state.
+        val awaiting = resolutions.filterIsInstance<Resolution.AwaitingConsent>().map { it.mediaId }
 
         if (confirmed.isNotEmpty()) {
             db.trashed().setState(confirmed, TrashState.TRASHED.name)
@@ -145,7 +158,7 @@ class TrashRepository(
         }
         if (vanished.isNotEmpty()) db.trashed().delete(vanished)
 
-        RecoveryReport(confirmed, restored, declined, vanished)
+        RecoveryReport(confirmed, restored, declined, vanished, awaiting)
     }
 
     /** Same I4 exposure as [verifyAndResolve] — [reconcileBin] also queries live rows. */
@@ -153,14 +166,36 @@ class TrashRepository(
         if (!hasFullMediaAccess()) return@withContext BinView(emptyList(), emptyList())
 
         val local = db.trashed().all().map { it.toDomain() }
-        reconcileBin(local, liveRowsFor(local))
+        reconcileBin(local, liveRowsFor(local), System.currentTimeMillis())
     }
 
     suspend fun trashedCount(): Int = withContext(Dispatchers.IO) { db.trashed().trashedCount() }
 
-    private suspend fun liveRowsFor(local: List<LocalTrashRecord>) =
-        media.verify(local.filter { !it.isVideo }.map { it.mediaId }, isVideo = false) +
-            media.verify(local.filter { it.isVideo }.map { it.mediaId }, isVideo = true)
+    /**
+     * Whole-branch review, I3: every id is looked up in BOTH collections and the results
+     * merged, rather than only in the one its locally-stored `isVideo` flag names.
+     *
+     * The Images and Video collection URIs are views over MediaProvider's single `files`
+     * table discriminated by `media_type`. If the stored flag ever disagrees with the
+     * row's current `media_type`, a single-collection lookup returns nothing — and an
+     * absent row resolves to [Resolution.Vanished], which deletes the local record. That
+     * is the one branch with no `isTrashed` protection at all (there is no row to
+     * consult), so R20's "a row Swipey holds in trust can never be discarded" guarantee
+     * does not reach it, and the outcome is an item sitting in the system trash with no
+     * Bin entry.
+     *
+     * The flag can go stale under us: trashing sets `triggerScan = true` right after the
+     * rename and the scanner rewrites columns unconditionally — the same mechanism the W2
+     * investigation documented correcting SIZE on FUSE-created rows also recomputes
+     * `media_type`. Querying both collections removes the dependence on a stored flag
+     * Swipey never refreshes; when the flag is right the extra query simply returns
+     * nothing. `Map + Map` is safe here because an id can only exist in one of the two
+     * views at a time.
+     */
+    private suspend fun liveRowsFor(local: List<LocalTrashRecord>): Map<Long, LiveTrashRow> {
+        val ids = local.map { it.mediaId }
+        return media.verify(ids, isVideo = false) + media.verify(ids, isVideo = true)
+    }
 
     /**
      * Reuses domain.resolveMediaAccess (Task 6) rather than duplicating its FULL/PARTIAL/

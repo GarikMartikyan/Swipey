@@ -40,11 +40,19 @@ fun ResultScreen(
         Text(Copy.NO_PERMANENT_DELETE_NOTE, style = MaterialTheme.typography.bodySmall)
 
         // Spec §9 rule 6 — honest per-item reporting, never blanket success.
-        if (report.declined.isNotEmpty()) {
+        //
+        // Whole-branch review, I2: `awaiting` counts here alongside `declined`. Both mean
+        // "asked for, not in the trash"; the grace window only changes whether the row was
+        // deleted yet, not what the user needs to be told. Without this, the one case that
+        // most needs the line — a chunked commit where the user approved the first dialog
+        // and cancelled the second, so the un-approved chunk is still inside its window —
+        // would silently lose "Stopped after 500 of 600" and read as a clean success.
+        val notTrashed = report.declined.size + report.awaiting.size
+        if (notTrashed > 0) {
             // F6: the denominator must be every id this commit attempted, not just
             // confirmed + declined — otherwise items that vanished mid-commit quietly
             // shrink "of M" below the actual request size.
-            val attempted = report.confirmedTrashed.size + report.declined.size + report.vanished.size
+            val attempted = report.confirmedTrashed.size + notTrashed + report.vanished.size
             Text(
                 Copy.cancelled(report.confirmedTrashed.size, attempted),
                 Modifier.padding(top = 8.dp),
