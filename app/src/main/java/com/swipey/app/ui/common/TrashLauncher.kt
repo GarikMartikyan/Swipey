@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import com.swipey.app.data.RecoveryReport
 import com.swipey.app.data.TrashRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -21,16 +22,28 @@ import kotlinx.coroutines.launch
  */
 class TrashLauncher(
     private val repository: TrashRepository,
+    private val scope: CoroutineScope,
     private val launch: (IntentSenderRequest) -> Unit,
     private val onFinished: (RecoveryReport) -> Unit,
 ) {
     private var queue: List<PendingIntent> = emptyList()
     private var index = 0
 
+    /**
+     * Task 10 review finding: an empty [requests] list previously left `launchNext()`
+     * returning immediately with nothing ever calling `onResult()` — the caller (e.g.
+     * the Review screen after Commit) would hang forever with no navigation and no
+     * error. `start()` must always terminate in a reported outcome, so the empty case
+     * is handled here directly rather than relying on every caller to check first.
+     */
     fun start(requests: List<PendingIntent>) {
         queue = requests
         index = 0
-        launchNext()
+        if (queue.isEmpty()) {
+            scope.launch { onFinished(repository.verifyAndResolve()) }
+        } else {
+            launchNext()
+        }
     }
 
     private fun launchNext() {
@@ -99,6 +112,7 @@ fun rememberTrashLauncher(
     return remember(repository) {
         TrashLauncher(
             repository = repository,
+            scope = scope,
             launch = { request -> activityLauncher.launch(request) },
             onFinished = { report -> currentOnFinished.value(report) },
         ).also { holder[0] = it }
