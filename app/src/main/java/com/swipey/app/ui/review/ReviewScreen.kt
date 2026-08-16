@@ -25,11 +25,21 @@ import com.swipey.app.domain.chunkedForRequest
 import com.swipey.app.domain.formatBytes
 import com.swipey.app.ui.common.Copy
 
+/**
+ * F4 (Task 10 review): [committing] is not in the brief's 3-param signature (Ruling R6
+ * pins that block verbatim), but disabling in-flight mutation is a correctness fix, not
+ * a signature dispute — without it, Task 20's onCommit can call prepareTrash (which bakes
+ * the marked URIs into the PendingIntents right there) while the grid and button stay
+ * live, so unmarking a thumbnail or tapping Commit again during the dialog's beat has no
+ * effect on what actually gets trashed. Task 20 MUST thread its own in-flight state in
+ * here; there is no default because silently omitting it would defeat the fix.
+ */
 @Composable
 fun ReviewScreen(
     items: List<MediaItem>,
     onUnmark: (Long) -> Unit,
     onCommit: () -> Unit,
+    committing: Boolean,
 ) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text(Copy.REVIEW_TITLE, style = MaterialTheme.typography.headlineSmall)
@@ -45,7 +55,12 @@ fun ReviewScreen(
         } else {
             LazyVerticalGrid(GridCells.Fixed(3), Modifier.weight(1f)) {
                 items(items, key = { it.id }) { item ->
-                    Box(Modifier.padding(2.dp).aspectRatio(1f).clickable { onUnmark(item.id) }) {
+                    Box(
+                        Modifier
+                            .padding(2.dp)
+                            .aspectRatio(1f)
+                            .clickable(enabled = !committing) { onUnmark(item.id) },
+                    ) {
                         AsyncImage(
                             model = contentUriFor(item.id, item.isVideo),
                             contentDescription = item.displayName,
@@ -74,7 +89,7 @@ fun ReviewScreen(
 
         Button(
             onClick = onCommit,
-            enabled = items.isNotEmpty(),
+            enabled = items.isNotEmpty() && !committing,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {
             Text(Copy.reviewAction(items.size))
