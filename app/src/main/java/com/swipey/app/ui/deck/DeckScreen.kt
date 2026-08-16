@@ -1,5 +1,6 @@
 package com.swipey.app.ui.deck
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +34,11 @@ fun DeckScreen(
     viewModel: DeckViewModel,
     onReview: () -> Unit,
     onDone: () -> Unit,
+    // Fix round 2, Important 5: invoked once the user confirms discarding a Back press
+    // with marks pending — the caller performs the actual navigation (a plain
+    // `navController.popBackStack()`), mirroring what an un-intercepted Back would have
+    // done.
+    onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Whether a swipe decision is currently mid fly-off animation; while true the
@@ -39,6 +46,34 @@ fun DeckScreen(
     // against a card that's already committing to a different one (fix round 1,
     // Critical 2).
     var committing by remember { mutableStateOf(false) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+
+    // Fix round 2, Important 5: DECK_BACK_CONFIRM/DECK_DISCARD/DECK_REVIEW were dead
+    // copy — nothing intercepted Back, so marked-but-uncommitted items were silently
+    // abandoned. Only intercepts when there's something to lose; with nothing marked,
+    // Back falls through to the default pop untouched.
+    BackHandler(enabled = state.markedCount > 0) {
+        showDiscardConfirm = true
+    }
+
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text(Copy.DECK_BACK_CONFIRM) },
+            confirmButton = {
+                TextButton(onClick = { showDiscardConfirm = false; onBack() }) {
+                    Text(Copy.DECK_DISCARD)
+                }
+            },
+            dismissButton = {
+                // Not a "cancel" — takes the user to Review instead, so the marks they
+                // were about to lose have somewhere useful to go.
+                TextButton(onClick = { showDiscardConfirm = false; onReview() }) {
+                    Text(Copy.DECK_REVIEW)
+                }
+            },
+        )
+    }
 
     // Terminal states, spec §4. Only the "marked" path auto-navigates: exhausted with
     // nothing marked stops here instead (fix round 1, Important 5b) so the session's

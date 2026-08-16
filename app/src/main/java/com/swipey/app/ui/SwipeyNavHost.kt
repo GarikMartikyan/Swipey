@@ -1,7 +1,6 @@
 package com.swipey.app.ui
 
 object Routes {
-    const val PERMISSION = "permission"
     const val HOME = "home"
     const val SORT = "sort"
     const val ALBUMS = "albums"

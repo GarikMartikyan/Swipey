@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import com.swipey.app.ui.albums.AlbumsScreen
 import com.swipey.app.ui.albums.SortChooserScreen
 import com.swipey.app.ui.bin.BinScreen
 import com.swipey.app.ui.bin.BinViewModel
+import com.swipey.app.ui.common.Copy
 import com.swipey.app.ui.common.rememberTrashLauncher
 import com.swipey.app.ui.deck.DeckScreen
 import com.swipey.app.ui.deck.DeckViewModel
@@ -51,14 +53,20 @@ import kotlinx.coroutines.withContext
  *    it isn't re-scoped to a NavBackStackEntry). Deck.load() rebuilds its session on
  *    every entry, so Activity-lifetime reuse of the instance is safe.
  *  - the last commit's [RecoveryReport]/expiry, which the Result route has no route
- *    argument to carry (Routes.RESULT takes none) so it is hoisted here instead.
+ *    argument to carry (Routes.RESULT takes none) so it is hoisted here instead. Fix
+ *    round 2, Important 3: both are `rememberSaveable`, not plain `remember` — Result's
+ *    self-heal-to-Home branch below exists for a genuine process death, and a plain
+ *    `remember` was firing it on *every* Activity recreation (rotation, a dark-mode
+ *    switch at sunset, a font-size or locale change — `MainActivity` declares no
+ *    `android:configChanges`), silently discarding the outcome of a commit just made.
+ *    [RecoveryReport] is `Serializable` specifically so this can hold it directly.
  */
 @Composable
 fun SwipeyRoot(app: SwipeyApp) {
     val navController = rememberNavController()
     var binCount by remember { mutableIntStateOf(0) }
-    var trashReport by remember { mutableStateOf<RecoveryReport?>(null) }
-    var trashExpirySec by remember { mutableStateOf<Long?>(null) }
+    var trashReport by rememberSaveable { mutableStateOf<RecoveryReport?>(null) }
+    var trashExpirySec by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val deckViewModel: DeckViewModel = viewModel(
         factory = viewModelFactory {
@@ -164,6 +172,12 @@ fun SwipeyRoot(app: SwipeyApp) {
                             popUpTo(Routes.HOME) { inclusive = true }
                         }
                     },
+                    // Fix round 2, Important 5: DeckScreen only calls this once the user
+                    // has confirmed discarding pending marks in its own dialog (or there
+                    // was nothing to confirm, since its BackHandler is disabled at
+                    // markedCount == 0) — so a plain pop here reproduces exactly what an
+                    // un-intercepted Back press would have done.
+                    onBack = { navController.popBackStack() },
                 )
             }
 
@@ -174,20 +188,33 @@ fun SwipeyRoot(app: SwipeyApp) {
                 val markedCount = deckViewModel.state.collectAsStateWithLifecycle().value.markedCount
                 val items = remember(markedCount) { deckViewModel.marked() }
 
-                var committing by remember { mutableStateOf(false) }
+                // Fix round 2, Critical 2: `preparing` only ever covers the short window
+                // between the Commit tap and `trashLauncher.start()` actually running —
+                // the suspend `prepareTrash()` Room write plus PendingIntent build. It is
+                // reset in a `finally` on every path out of that window (success,
+                // cancellation, or a thrown exception), so it can never be left stuck.
+                // Once `start()` has run, `trashLauncher.inFlight` — `rememberSaveable`,
+                // and already Compose-observable and recreation-safe on its own — is the
+                // single source of truth for "is a commit in flight"; `committing` below
+                // is the OR of the two rather than a second flag tracked independently
+                // (the previous plain-`remember` `committing` could desync from
+                // `inFlight` across an Activity recreation and latch true forever, since
+                // nothing anywhere caught the exception that could also leave it stuck).
+                var preparing by remember { mutableStateOf(false) }
+                var commitError by remember { mutableStateOf<String?>(null) }
                 val scope = rememberCoroutineScope()
 
                 val trashLauncher = rememberTrashLauncher(
                     repository = app.trashRepository,
                 ) { report ->
-                    committing = false
                     scope.launch {
                         // TrashLauncher.finish() already ran verifyAndResolve() to produce
                         // [report]; binView() is queried again here only to attach each
                         // newly-confirmed item's expiry date for ResultScreen.
                         val view = app.trashRepository.binView()
+                        val confirmed = report.confirmedTrashed.toSet()
                         trashExpirySec = view.entries
-                            .filter { it.record.mediaId in report.confirmedTrashed }
+                            .filter { it.record.mediaId in confirmed }
                             .mapNotNull { it.expiresAtSec }
                             .minOrNull()
                         trashReport = report
@@ -204,25 +231,44 @@ fun SwipeyRoot(app: SwipeyApp) {
                     items = items,
                     onUnmark = { id -> deckViewModel.unmark(id) },
                     onCommit = {
-                        committing = true
+                        commitError = null
+                        preparing = true
                         scope.launch {
-                            // prepareTrash() writes the PENDING_TRASH rows before returning
-                            // the intents — that ordering is what survives a process kill
-                            // during the consent dialog, so it must not be split apart here.
-                            val requests = app.trashRepository.prepareTrash(items, System.currentTimeMillis())
-                            trashLauncher.start(requests)
+                            try {
+                                // prepareTrash() writes the PENDING_TRASH rows before returning
+                                // the intents — that ordering is what survives a process kill
+                                // during the consent dialog, so it must not be split apart here.
+                                val requests = app.trashRepository.prepareTrash(items, System.currentTimeMillis())
+                                trashLauncher.start(requests)
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                // Fix round 2, Critical 2: without this, a throw here (e.g.
+                                // prepareTrash's Room write) would leave nothing to reset
+                                // `preparing` — trashLauncher.start() is never reached, so
+                                // `inFlight` never becomes true either, and the user would
+                                // be stuck looking at a live screen with no record of what
+                                // happened and no way to tell the commit failed.
+                                commitError = Copy.COMMIT_FAILED
+                            } finally {
+                                preparing = false
+                            }
                         }
                     },
-                    committing = committing,
+                    committing = preparing || trashLauncher.inFlight,
+                    commitError = commitError,
                 )
             }
 
             composable(Routes.RESULT) {
                 val report = trashReport
                 if (report == null) {
-                    // Defensive only: reachable if the process died on this exact screen,
-                    // since the report is held in plain `remember`, not restored state.
-                    // Self-heals back to Home rather than rendering nothing.
+                    // Fix round 2, Important 3: now reachable only if the process was
+                    // killed outright (no saved-state restore at all) or this route is
+                    // entered with nothing ever committed — trashReport/trashExpirySec are
+                    // `rememberSaveable` now, so an ordinary Activity recreation (rotation,
+                    // dark mode, font size, locale) no longer lands here. Kept as a
+                    // last-resort self-heal back to Home rather than rendering nothing.
                     LaunchedEffect(Unit) {
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.HOME) { inclusive = true }

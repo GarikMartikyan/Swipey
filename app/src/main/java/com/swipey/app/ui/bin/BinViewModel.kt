@@ -99,6 +99,19 @@ class BinViewModel(
         }
     }
 
+    /**
+     * Fix round 2, Critical 2 (restore side): `beginRestore()` sets `restoring = true`
+     * before its suspend work, same as the trash-side commit path — if that work throws
+     * (e.g. `prepareRestore`'s Room write), `TrashLauncher.start()` is never reached and
+     * nothing else would ever clear the flag, leaving the grid permanently disabled.
+     * The call site (BinScreen) catches that failure and calls this to reset state and
+     * report it honestly, reusing the existing `restoreMessage` slot rather than adding
+     * new UI.
+     */
+    fun onRestoreFailed() {
+        _state.value = _state.value.copy(restoring = false, restoreMessage = Copy.RESTORE_FAILED)
+    }
+
     /** Re-reads reconciled state. Does not itself call verifyAndResolve() — see call sites. */
     private suspend fun reload(restoreMessage: String?) {
         val view = repository.binView()

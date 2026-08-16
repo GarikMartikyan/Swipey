@@ -33,6 +33,11 @@ import com.swipey.app.ui.common.Copy
  * live, so unmarking a thumbnail or tapping Commit again during the dialog's beat has no
  * effect on what actually gets trashed. Task 20 MUST thread its own in-flight state in
  * here; there is no default because silently omitting it would defeat the fix.
+ *
+ * [commitError] (fix round 2, Critical 2): set by the caller when the commit path throws
+ * before a launcher sequence ever starts (e.g. `prepareTrash`'s Room write). Defaulted to
+ * `null` since it postdates the brief's pinned signature and every existing call site
+ * predates it having anything to report.
  */
 @Composable
 fun ReviewScreen(
@@ -40,6 +45,7 @@ fun ReviewScreen(
     onUnmark: (Long) -> Unit,
     onCommit: () -> Unit,
     committing: Boolean,
+    commitError: String? = null,
 ) {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text(Copy.REVIEW_TITLE, style = MaterialTheme.typography.headlineSmall)
@@ -47,6 +53,9 @@ fun ReviewScreen(
             Copy.reviewHeader(items.size, formatBytes(items.sumOf { it.sizeBytes })),
             style = MaterialTheme.typography.bodyMedium,
         )
+        commitError?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium)
+        }
 
         if (items.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {

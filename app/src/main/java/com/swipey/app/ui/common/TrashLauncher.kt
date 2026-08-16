@@ -55,9 +55,15 @@ class TrashLauncher(
     // overlapping consent-dialog chains against the same records. inFlight makes start()
     // a no-op while a sequence is running, cleared on every terminal path (both the
     // empty-queue branch and finish()) so a stuck flag can never wedge the launcher.
-    private var inFlight: Boolean
+    // Fix round 2, Critical 2: the getter is public so a caller-owned "is something in
+    // flight" flag (e.g. Review's `committing`) can be reconciled against this one after
+    // an Activity recreation, rather than tracking a second flag that only agrees with
+    // this one by coincidence. Reading it inside a @Composable is Compose-observable,
+    // since it's backed by `inFlightState`, a `rememberSaveable` MutableState. The
+    // setter stays private/internal-only — nothing outside this class may flip it.
+    var inFlight: Boolean
         get() = inFlightState.value
-        set(value) { inFlightState.value = value }
+        private set(value) { inFlightState.value = value }
 
     /**
      * Task 10 review finding: an empty [requests] list previously left `launchNext()`

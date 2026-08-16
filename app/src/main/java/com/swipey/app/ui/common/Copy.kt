@@ -47,7 +47,12 @@ object Copy {
 
     const val DENIED_TITLE = "Access denied"
     const val DENIED_BODY = "Swipey can't do anything without access to your gallery."
-    const val DENIED_ACTION = "Try again"
+    // Fix round 2, Important 4: this is now wired to the permanently-denied state,
+    // where Android will no longer show a permission prompt at all — re-launching the
+    // request would silently do nothing, so the only working action is Settings.
+    // "Try again" would mislabel that; kept alongside PARTIAL_ACTION's identical wording
+    // since both open the same screen for the same reason.
+    const val DENIED_ACTION = "Open settings"
 
     const val DECK_EMPTY_TITLE = "Nothing left to review"
     const val DECK_EMPTY_BODY = "You've been through everything here."
@@ -86,6 +91,14 @@ object Copy {
     /** F6: [total] must be every id the commit attempted — confirmed + declined + vanished. */
     fun cancelled(done: Int, total: Int) = "Stopped after $done of $total items"
 
+    /**
+     * Fix round 2, Critical 2: shown when the commit path itself throws (e.g. before
+     * `TrashLauncher.start()` is ever reached) rather than reporting a dialog outcome.
+     * Distinct from `cancelled()`, which describes a partially-declined *dialog*
+     * result — this is "nothing happened, nothing was trashed," never "some items were."
+     */
+    const val COMMIT_FAILED = "Couldn't move those items to trash. Nothing was changed — try again."
+
     // F8(c): distinct from BIN_TITLE — on ResultScreen, right after items were just binned,
     // a bare "Bin" label reads ambiguously as the verb (throw away) rather than the
     // navigate-to-Bin destination it actually is.
@@ -110,4 +123,7 @@ object Copy {
      * would falsely tell the user their restore attempt moved items to trash.
      */
     fun restoreOutcome(restored: Int, attempted: Int) = "Restored $restored of $attempted items"
+
+    /** Fix round 2, Critical 2: the restore-side equivalent of [COMMIT_FAILED]. */
+    const val RESTORE_FAILED = "Couldn't restore those items. Nothing was changed — try again."
 }

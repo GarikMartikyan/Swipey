@@ -1,7 +1,9 @@
 package com.swipey.app.ui.permission
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -20,11 +22,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.swipey.app.domain.MediaAccess
 import com.swipey.app.domain.resolveMediaAccess
@@ -40,6 +44,22 @@ fun currentMediaAccess(context: Context): MediaAccess = resolveMediaAccess(
         granted(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED),
 )
 
+/** Standard "find the hosting Activity from a possibly-wrapped Context" walk. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun openAppSettings(context: Context) {
+    context.startActivity(
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        ),
+    )
+}
+
 private fun requestedPermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= 34) {
         arrayOf(
@@ -54,7 +74,13 @@ private fun requestedPermissions(): Array<String> =
 @Composable
 fun PermissionGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     var access by remember { mutableStateOf(currentMediaAccess(context)) }
+    // Fix round 2, Important 4: survives rotation while the gate is showing — needed
+    // because `shouldShowRequestPermissionRationale` alone cannot distinguish "never
+    // asked" from "permanently denied" (both return false); this flag disambiguates by
+    // recording that at least one request cycle has actually completed.
+    var hasRequested by rememberSaveable { mutableStateOf(false) }
 
     // Re-check on resume so returning from Settings updates the gate.
     LifecycleResumeEffect(Unit) {
@@ -64,24 +90,37 @@ fun PermissionGate(content: @Composable () -> Unit) {
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { access = currentMediaAccess(context) }
+    ) {
+        hasRequested = true
+        access = currentMediaAccess(context)
+    }
 
-    when (access) {
-        MediaAccess.FULL -> content()
-        MediaAccess.PARTIAL -> Message(
+    // Android's own signal that a further launcher.launch() would be a silent no-op:
+    // the user has been through at least one request, access is still DENIED, and the
+    // system will no longer show a rationale for any of the requested permissions —
+    // either "don't ask again" was checked, or the OS's own two-strike auto-deny
+    // kicked in. Without this branch the DENIED state above was an inescapable front
+    // door: its only action (re-launching the request) does nothing, and Back is the
+    // sole way out.
+    val permanentlyDenied = access == MediaAccess.DENIED && hasRequested &&
+        activity != null &&
+        requestedPermissions().none { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
+
+    when {
+        access == MediaAccess.FULL -> content()
+        access == MediaAccess.PARTIAL -> Message(
             title = Copy.PARTIAL_TITLE,
             body = Copy.PARTIAL_BODY,
             action = Copy.PARTIAL_ACTION,
-            onAction = {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.fromParts("package", context.packageName, null),
-                    ),
-                )
-            },
+            onAction = { openAppSettings(context) },
         )
-        MediaAccess.DENIED -> Message(
+        permanentlyDenied -> Message(
+            title = Copy.DENIED_TITLE,
+            body = Copy.DENIED_BODY,
+            action = Copy.DENIED_ACTION,
+            onAction = { openAppSettings(context) },
+        )
+        else -> Message(
             title = Copy.PERMISSION_TITLE,
             body = Copy.PERMISSION_BODY,
             action = Copy.PERMISSION_GRANT,

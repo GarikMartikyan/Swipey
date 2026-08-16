@@ -45,6 +45,17 @@ class DeckViewModel(
     private val dbMutex = Mutex()
 
     fun load(bucketId: Long?, sort: SortMode, shuffle: Boolean, seed: Long) {
+        // Fix round 2, Critical 1: this must run synchronously, before the coroutine
+        // below ever suspends. DeckViewModel is shared (Activity-scoped) across every
+        // Deck entry, and without this reset the *previous* album's session — its
+        // current card, its marked count, its exhausted flag — stays live and visible
+        // for the entire keptIds()/queryAll() I/O window, and permanently if that
+        // session happened to be exhausted-with-marks (DeckScreen's terminal
+        // LaunchedEffect fires on the stale state and bounces straight to an empty
+        // Review before this load() ever lands). `DeckUiState()`'s `loading = true`
+        // default only applies to the field's very first value, never to a reload.
+        session = SwipeSession(emptyList())
+        _state.value = DeckUiState()
         viewModelScope.launch {
             val kept = db.reviewed().keptIds()
             val fetched = media.queryAll()

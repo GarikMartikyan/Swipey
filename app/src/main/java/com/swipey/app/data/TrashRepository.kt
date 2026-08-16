@@ -23,14 +23,21 @@ import com.swipey.app.domain.resolveMediaAccess
 import com.swipey.app.domain.resolveRecords
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.Serializable
 
-/** What a recovery or verification pass actually changed, for honest per-item reporting. */
+/**
+ * What a recovery or verification pass actually changed, for honest per-item reporting.
+ *
+ * Fix round 2, Important 3: [Serializable] so `SwipeyApp.kt`'s Result-route state can be
+ * held in `rememberSaveable` rather than plain `remember` — every field is a `List<Long>`,
+ * so this is a trivial, lossless round trip through a `Bundle`.
+ */
 data class RecoveryReport(
     val confirmedTrashed: List<Long>,
     val restored: List<Long>,
     val declined: List<Long>,
     val vanished: List<Long>,
-) {
+) : Serializable {
     val isEmpty: Boolean get() =
         confirmedTrashed.isEmpty() && restored.isEmpty() && declined.isEmpty() && vanished.isEmpty()
 }

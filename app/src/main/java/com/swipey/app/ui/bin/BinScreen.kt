@@ -121,7 +121,19 @@ fun BinScreen(viewModel: BinViewModel) {
             onClick = {
                 val ids = state.selected.toList()
                 attemptedIds = ids
-                scope.launch { trashLauncher.start(viewModel.beginRestore()) }
+                scope.launch {
+                    // Fix round 2, Critical 2 (restore side): without this, a throw
+                    // from beginRestore() (e.g. its Room write) would leave
+                    // `restoring` latched true forever — trashLauncher.start() is
+                    // never reached, so nothing else resets it.
+                    try {
+                        trashLauncher.start(viewModel.beginRestore())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        viewModel.onRestoreFailed()
+                    }
+                }
             },
             // F2: disabled for the whole in-flight window, not just until the click
             // handler returns — beginRestore() is a suspend Room write + binder round
