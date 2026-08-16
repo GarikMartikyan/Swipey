@@ -123,10 +123,15 @@ fun BinScreen(viewModel: BinViewModel) {
                 attemptedIds = ids
                 scope.launch { trashLauncher.start(viewModel.beginRestore()) }
             },
-            enabled = state.selected.isNotEmpty(),
+            // F2: disabled for the whole in-flight window, not just until the click
+            // handler returns — beginRestore() is a suspend Room write + binder round
+            // trip before the dialog even appears, during which state.selected is
+            // otherwise unchanged and a second tap would start a second sequence.
+            enabled = state.selected.isNotEmpty() && !state.restoring,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) {
-            Text("${Copy.BIN_RESTORE} ${state.selected.size}")
+            // F8(b): was composed at this call site; now lives in Copy.kt.
+            Text(Copy.binRestoreAction(state.selected.size))
         }
     }
 }

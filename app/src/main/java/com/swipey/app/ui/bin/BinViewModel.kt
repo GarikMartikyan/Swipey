@@ -1,13 +1,16 @@
 package com.swipey.app.ui.bin
 
 import android.app.PendingIntent
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.swipey.app.data.MediaRepository
 import com.swipey.app.data.RecoveryReport
 import com.swipey.app.data.TrashRepository
 import com.swipey.app.domain.BinEntry
+import com.swipey.app.domain.MediaAccess
 import com.swipey.app.ui.common.Copy
+import com.swipey.app.ui.permission.currentMediaAccess
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -19,6 +22,10 @@ data class BinUiState(
     val otherItemsCount: Int = 0,
     val selected: Set<Long> = emptySet(),
     val restoreMessage: String? = null,
+    // F2: the UX half of the double-restore guard — BinScreen disables the Restore
+    // button while this is true. TrashLauncher's own inFlight flag is the correctness
+    // half (a no-op re-entry into start()); this is what stops the second tap.
+    val restoring: Boolean = false,
 )
 
 class BinViewModel(
@@ -27,6 +34,10 @@ class BinViewModel(
     // not a second one Task 20 could accidentally pass in mismatched.
     val repository: TrashRepository,
     private val media: MediaRepository,
+    // F1: needed to guard the "other items" footer the same way 371056c guarded
+    // verifyAndResolve()/binView() — see reload(). Expected to be the application
+    // context, mirroring TrashRepository's own Context param.
+    private val context: Context,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BinUiState())
@@ -60,6 +71,7 @@ class BinViewModel(
     suspend fun beginRestore(): List<PendingIntent> {
         val records = selectedRecords()
         if (records.isEmpty()) return emptyList()
+        _state.value = _state.value.copy(restoring = true)
         return repository.prepareRestore(records)
     }
 
@@ -91,14 +103,26 @@ class BinViewModel(
     private suspend fun reload(restoreMessage: String?) {
         val view = repository.binView()
 
-        // Ruling R7: footer noting how many other items sit in the system trash that
-        // Swipey didn't put there. reconcileBin() only emits a BinEntry for a
-        // resolution of Keep or MarkTrashed, and both require live.isTrashed == true,
-        // so every entry is already one of the rows queryTrashed() (MATCH_ONLY)
-        // returns; the remainder is trash Swipey has no local record for at all.
-        // coerceAtLeast(0) guards the two independent queries racing a state change.
-        val totalTrashed = media.queryTrashed().size
-        val otherItems = (totalTrashed - view.entries.size).coerceAtLeast(0)
+        // Ruling R7 / F1 (Task 10 review): footer noting how many other items sit in
+        // the system trash that Swipey didn't put there. reconcileBin() only emits a
+        // BinEntry for a resolution of Keep or MarkTrashed, and both require
+        // live.isTrashed == true, so every entry is already one of the rows
+        // queryTrashed() (MATCH_ONLY) returns; the remainder is trash Swipey has no
+        // local record for at all. coerceAtLeast(0) guards the two independent
+        // queries racing a state change.
+        //
+        // binView() (371056c) now returns empty rather than querying when access
+        // isn't FULL — but MediaRepository.queryTrashed() has no such guard. Without
+        // this check, under PARTIAL access queryTrashed() still returns rows while
+        // view.entries is forced to empty, so the subtraction would attribute every
+        // row — including Swipey's own trashed items, for which it still holds
+        // records — to "other apps". Under DENIED access queryTrashed() would throw
+        // SecurityException outright. So: no FULL access, no footer, no query.
+        val otherItems = if (currentMediaAccess(context) == MediaAccess.FULL) {
+            (media.queryTrashed().size - view.entries.size).coerceAtLeast(0)
+        } else {
+            0
+        }
 
         _state.value = BinUiState(
             loading = false,
@@ -107,6 +131,7 @@ class BinViewModel(
             otherItemsCount = otherItems,
             selected = emptySet(),
             restoreMessage = restoreMessage,
+            restoring = false,
         )
     }
 }
