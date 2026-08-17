@@ -28,9 +28,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.swipey.app.data.ResumePoint
 import com.swipey.app.data.contentUriFor
 import com.swipey.app.domain.Album
 import com.swipey.app.domain.MediaItem
@@ -51,9 +55,12 @@ import com.swipey.app.domain.formatBytes
 import com.swipey.app.ui.common.Copy
 import com.swipey.app.ui.design.SwipeyButton
 import com.swipey.app.ui.design.SwipeyButtonVariant
+import com.swipey.app.ui.design.SwipeyCaptionGradient
+import com.swipey.app.ui.design.SwipeyCaptionScrim
 import com.swipey.app.ui.design.SwipeyCard
 import com.swipey.app.ui.design.SwipeyDarkColors
-import com.swipey.app.ui.design.SwipeyDivider
+import com.swipey.app.ui.design.SwipeyDisabledAlpha
+import com.swipey.app.ui.design.SwipeyDrawer
 import com.swipey.app.ui.design.SwipeyIcon
 import com.swipey.app.ui.design.SwipeyIconButton
 import com.swipey.app.ui.design.SwipeyIcons
@@ -69,7 +76,7 @@ import com.swipey.app.ui.design.SwipeyText
 import com.swipey.app.ui.design.SwipeyTheme
 
 /**
- * The front door: one big way in, one small one, every album, and the Bin.
+ * The front door: one big way in, one small one, and every album.
  *
  * ### Why a hero rather than a run of rows
  * Home used to be three equal rows — All media, Albums, Shuffle — which made three
@@ -80,13 +87,15 @@ import com.swipey.app.ui.design.SwipeyTheme
  * while the four-way chooser stays one tap away.
  *
  * ### Every thumbnail on this screen is the real thing
- * The hero is the most recent item on the device, each album's cover is that album's most
- * recent item, and the Shuffle thumbnail is the card a shuffle started right now would
- * actually open on — see [HomeViewModel.load], which resolves all three from one pass and
- * carries the shuffle's seed through to the deck so the last of those stays true.
+ * The hero is the most recent item on the device and each album's cover is that album's
+ * most recent item — both resolved from one pass in [HomeViewModel.load] rather than
+ * guessed at. Shuffle is the exception, and deliberately so: it shows a glyph, because a
+ * row that promised the photograph it would open on could only keep that promise by
+ * shuffling the entire library on every visit to this screen.
  *
- * The whole page is one [LazyColumn]: every album is listed, nothing is truncated, and the
- * Bin footer scrolls off with the rest rather than sitting in a fixed bar.
+ * The whole page is one [LazyColumn]: every album is listed and nothing is truncated. It is
+ * also, now, only ways into a session — the Bin has moved behind the burger in the header,
+ * where [HomeMenu] explains why.
  */
 @Composable
 fun HomeScreen(
@@ -95,23 +104,29 @@ fun HomeScreen(
     onAllMedia: () -> Unit,
     onSort: () -> Unit,
     onShuffle: (Long) -> Unit,
+    /** Reopens the remembered queue on the card after the last decision. See [ShuffleAndRecentRow]. */
+    onResume: (ResumePoint) -> Unit,
     onAlbum: (Album) -> Unit,
     onBin: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hasContent = state.albums.isNotEmpty()
+    var menuOpen by remember { mutableStateOf(false) }
 
-    SwipeyScreen {
+    SwipeyScreen(
+        overlay = {
+            HomeMenu(
+                visible = menuOpen,
+                binCount = binCount,
+                onDismiss = { menuOpen = false },
+                // Closed before it navigates, so coming back from the Bin does not land on
+                // a drawer the user has no memory of leaving open.
+                onBin = { menuOpen = false; onBin() },
+            )
+        },
+    ) {
         LazyColumn(Modifier.fillMaxSize()) {
-            item(key = "header") {
-                HomeHeader(
-                    // A toggle over an empty or unread album section controls nothing, and
-                    // an inert control is worse than an absent one.
-                    showToggle = hasContent,
-                    albumsAsGrid = state.albumsAsGrid,
-                    onToggle = viewModel::setAlbumsAsGrid,
-                )
-            }
+            item(key = "header") { HomeHeader(onMenu = { menuOpen = true }) }
 
             item(key = "progress") {
                 // The app's loading language everywhere: a 2dp rule, never a spinner. The
@@ -140,18 +155,17 @@ fun HomeScreen(
                     }
 
                     item(key = "shuffle") {
-                        ShuffleRow(
-                            first = state.shuffleFirst,
-                            onShuffle = { onShuffle(state.shuffleSeed) },
+                        ShuffleAndRecentRow(
+                            resume = state.resume,
+                            onShuffle = { onShuffle(System.currentTimeMillis()) },
+                            onResume = onResume,
                         )
                     }
 
                     item(key = "albumsHeader") {
-                        SwipeyText(
-                            Copy.HOME_ALBUMS,
-                            modifier = Modifier.padding(top = SwipeySpacing.xl, bottom = SwipeySpacing.sm),
-                            style = SwipeyTheme.typography.title,
-                            color = SwipeyTheme.colors.textPrimary,
+                        AlbumsHeader(
+                            albumsAsGrid = state.albumsAsGrid,
+                            onToggle = viewModel::setAlbumsAsGrid,
                         )
                     }
 
@@ -170,7 +184,9 @@ fun HomeScreen(
                             AlbumRow(
                                 album = album,
                                 onPick = onAlbum,
-                                // The Bin footer draws the rule that closes the list.
+                                // No rule under the last album: the Bin footer used to draw
+                                // the one that closed the list, and with the Bin moved into
+                                // the menu there is nothing below it to be separated from.
                                 divider = index < state.albums.lastIndex,
                             )
                         }
@@ -180,7 +196,9 @@ fun HomeScreen(
                 !state.loading -> item(key = "empty") { HomeMessage(Copy.HOME_EMPTY, body = Copy.HOME_EMPTY_BODY) }
             }
 
-            item(key = "bin") { BinFooter(binCount, onBin) }
+            // The page ends on the albums now. Padding rather than a row, so the last one
+            // clears the navigation bar instead of sitting on it.
+            item(key = "foot") { Spacer(Modifier.height(SwipeySpacing.xl)) }
         }
     }
 }
@@ -196,26 +214,58 @@ private const val HeroAspect = 16f / 10f
 private val ThumbSize = 56.dp
 
 /**
- * The foot of a gradient under a caption that sits on a photograph.
+ * The albums list/grid toggle's disc, and the glyph inside it.
  *
- * [com.swipey.app.ui.design.SwipeyColors.scrim]'s 60% is tuned to dim a whole screen
- * behind a sheet; over an arbitrary photograph — which may be a snow field — it leaves
- * white text at roughly 2.5:1. At 90% the title measures ~17:1 and the caption line
- * ~5.5:1 whatever is underneath. It is a gradient rather than a bar so it darkens the
- * picture only where the words are.
+ * Deliberately under the app's 48dp control size. This one is a section heading's control,
+ * not a screen's, and at 48dp it drew a circle the size of the word "Albums" next to the
+ * word "Albums" — two things claiming the same weight, when only one of them is the
+ * heading. 32dp reads as an accessory to the line it sits on. The tappable area is still
+ * 48dp; see [SwipeyIconButton].
  */
-private val CaptionScrim = Color.Black.copy(alpha = 0.9f)
+private val ToggleSize = 32.dp
+private val ToggleIcon = 18.dp
+
+/**
+ * The header's burger, and the glyph inside it.
+ *
+ * Its own size rather than [ToggleSize]'s, because the two controls answer to different
+ * neighbours. The albums toggle sits beside a 22sp heading and has to stay under its
+ * weight; this one sits beside a 34sp wordmark, where the same 32dp disc read as a
+ * footnote — it is the only control on the screen's title line and the way to everything
+ * that is not a session, so it should look like it can be hit without aiming.
+ *
+ * Still under the 48dp control size, which is the point: the lockup stays the loudest
+ * thing on the line. The tappable area is 48dp regardless; see [SwipeyIconButton].
+ */
+private val MenuSize = 40.dp
+private val MenuIconSize = 22.dp
+
+/**
+ * The disc a control on a photograph is drawn at.
+ *
+ * Under the 48dp target it carries. The hero's sort control used to fill its whole target,
+ * which put a 48dp black disc in the corner of the one picture on Home that is meant to be
+ * looked at — big enough to read as part of the composition rather than as something
+ * resting on top of it. Shrinking the disc while the target stays put costs nothing: the
+ * area a thumb can hit is unchanged, and only the ink moved.
+ */
+private val PhotoButtonSize = 40.dp
+private val PhotoButtonIcon = 18.dp
 
 // ---------------------------------------------------------------------------
 // Header
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun HomeHeader(showToggle: Boolean, albumsAsGrid: Boolean, onToggle: (Boolean) -> Unit) {
+private fun HomeHeader(onMenu: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = SwipeySpacing.xxl, bottom = SwipeySpacing.lg),
+            // The bottom gutter is trimmed by what the burger's 48dp touch target adds
+            // around a 40dp line of type — 4dp above and 4dp below, since the row centres —
+            // so the lockup keeps the distance from the hero card it had before there was a
+            // control on this line to grow it.
+            .padding(top = SwipeySpacing.xxl, bottom = SwipeySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The lockup. The mark is measured from the wordmark's type size rather than fixed
@@ -230,24 +280,20 @@ private fun HomeHeader(showToggle: Boolean, albumsAsGrid: Boolean, onToggle: (Bo
 
         SwipeyText(
             Copy.APP_NAME,
-            // Takes the slack so the toggle stays pinned right as the wordmark grows with
-            // the user's font scale.
+            // Bounded rather than free: at a large font scale an unweighted wordmark would
+            // measure past the gutter instead of wrapping inside it.
             modifier = Modifier.weight(1f),
             style = SwipeyTheme.typography.display,
             color = SwipeyTheme.colors.textPrimary,
         )
-        if (showToggle) {
-            // The glyph shows the layout the next tap goes *to*, and the description says
-            // so out loud — a toggle whose icon means "you are here" and one whose icon
-            // means "tap for this" are indistinguishable without it.
-            SwipeyIconButton(
-                icon = if (albumsAsGrid) SwipeyIcons.ListRows else SwipeyIcons.Grid,
-                contentDescription = if (albumsAsGrid) Copy.HOME_SHOW_LIST else Copy.HOME_SHOW_GRID,
-                onClick = { onToggle(!albumsAsGrid) },
-                size = SwipeySize.touchMin,
-                iconSize = 20.dp,
-            )
-        }
+
+        SwipeyIconButton(
+            icon = SwipeyIcons.Menu,
+            contentDescription = Copy.HOME_MENU,
+            onClick = onMenu,
+            size = MenuSize,
+            iconSize = MenuIconSize,
+        )
     }
 }
 
@@ -260,6 +306,12 @@ private fun HeroCard(newest: MediaItem?, totalCount: Int, onOpen: () -> Unit, on
     SwipeyCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onOpen,
+        // The hairline is for cards made of text, where it is what separates a surface from
+        // the page behind it. This card is a photograph, and it already has an edge — its
+        // own — so a ring around it is a second rectangle drawn a hairline outside the first
+        // one. It also has nothing consistent to sit against: over a dark frame it vanishes
+        // and over a bright one it reads as a line the picture did not ask for.
+        bordered = false,
         // Zero, so the photograph reaches the card's own rounded edge; the caption
         // supplies its own inset over the top of it.
         contentPadding = PaddingValues(0.dp),
@@ -321,8 +373,11 @@ private fun HeroCard(newest: MediaItem?, totalCount: Int, onOpen: () -> Unit, on
  * Not [SwipeyIconButton]: a Neutral ghost is a hairline ring in the *theme's* colours over
  * a transparent ground, which over an arbitrary image is both invisible and, in the light
  * palette, near-black ink on a dark picture. This is the same answer `BinScreen`'s tile
- * badges give — a dark-palette disc with dark-palette ink, in both themes — at the app's
- * 48dp floor.
+ * badges give — a dark-palette disc with dark-palette ink, in both themes.
+ *
+ * Two boxes, not one, for the same reason [SwipeyIconButton] uses two: the outer carries
+ * the app's 48dp touch floor and the inner is what the eye sees, so the disc can be sized
+ * for the photograph it sits on without taking the target down with it.
  */
 @Composable
 private fun PhotoIconButton(
@@ -341,10 +396,7 @@ private fun PhotoIconButton(
 
     Box(
         modifier
-            .scale(scale)
             .size(SwipeySize.touchMin)
-            .clip(CircleShape)
-            .background(CaptionScrim)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -353,52 +405,241 @@ private fun PhotoIconButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        SwipeyIcon(icon, contentDescription = contentDescription, tint = SwipeyDarkColors.textPrimary, size = 20.dp)
+        Box(
+            Modifier
+                .scale(scale)
+                .size(PhotoButtonSize)
+                .clip(CircleShape)
+                .background(SwipeyCaptionScrim),
+            contentAlignment = Alignment.Center,
+        ) {
+            SwipeyIcon(
+                icon,
+                contentDescription = contentDescription,
+                tint = SwipeyDarkColors.textPrimary,
+                size = PhotoButtonIcon,
+            )
+        }
     }
 }
 
 /**
- * The dark ramp a caption sits on. Flat at [CaptionScrim] over the bottom third, so the
- * words never land on the part of the gradient that is still translucent.
+ * Home's caption ramp, which is now the app's: see [SwipeyCaptionGradient]. Kept as a
+ * one-line alias so the call sites below still read in Home's own vocabulary, and so the
+ * fractions they pass stay next to the shapes they were chosen for.
  */
 @Composable
-private fun BoxScope.CaptionGradient(heightFraction: Float) {
-    Box(
-        Modifier
-            .align(Alignment.BottomStart)
-            .fillMaxWidth()
-            .fillMaxHeight(heightFraction)
-            .background(
-                Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    0.7f to CaptionScrim,
-                    1f to CaptionScrim,
-                ),
-            ),
-    )
-}
+private fun BoxScope.CaptionGradient(heightFraction: Float) = SwipeyCaptionGradient(heightFraction)
 
 // ---------------------------------------------------------------------------
 // Shuffle
 // ---------------------------------------------------------------------------
 
+/**
+ * The two ways into a deck that are not an album: a random order, and the one you were
+ * already in.
+ *
+ * ### Why they share a line
+ * They are the same kind of offer — a queue, one tap away, needing no choice made about it —
+ * and they are the two shortcuts a returning user reaches for. As full-width rows they cost
+ * two of the four rows above the fold and pushed the albums off the screen. Side by side
+ * they cost one, and reading them together is the point: *anything, or where I was*.
+ *
+ * The cost is the subtitle, which now has half the width and gets one line. That is why
+ * Recent's says which queue rather than which photograph — the thumbnail already names the
+ * photograph, and it does it better than a filename would.
+ *
+ * ### Shuffle is unchanged
+ * A glyph, not a photograph, and its seed generated at the tap. The row used to show the
+ * picture the shuffle would open on, captioned "Starts on this one" — honest, but it made a
+ * promise the row did not need to make, and keeping it true meant shuffling the entire
+ * library on every visit to Home purely to find element zero.
+ *
+ * @param resume null before the user has swiped anything, and the tile draws itself as
+ *   unavailable rather than vanishing. A control that appears only once you have used the
+ *   app is one you have to find twice.
+ */
 @Composable
-private fun ShuffleRow(first: MediaItem?, onShuffle: () -> Unit) {
-    SwipeyRow(
-        title = Copy.HOME_SHUFFLE,
-        // "Starts on this one" is only said when there is a "this one" to point at. With
-        // everything already kept the deck has nothing to deal, and the row says so rather
-        // than promising a picture it isn't showing — it stays tappable, because the deck's
-        // own all-caught-up state is the honest place to land.
-        subtitle = if (first != null) Copy.HOME_SHUFFLE_SUB else Copy.HOME_SHUFFLE_EMPTY,
-        onClick = onShuffle,
-        leading = { MediaThumb(first?.id, first?.isVideo == true, ThumbSize) },
-    )
+private fun ShuffleAndRecentRow(
+    resume: ResumeOffer?,
+    onShuffle: () -> Unit,
+    onResume: (ResumePoint) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = SwipeySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm),
+    ) {
+        PairTile(
+            title = Copy.HOME_SHUFFLE,
+            subtitle = Copy.HOME_SHUFFLE_SUB,
+            onClick = onShuffle,
+            modifier = Modifier.weight(1f),
+            leading = {
+                Box(
+                    Modifier
+                        .size(PairThumb)
+                        .clip(RoundedCornerShape(SwipeyRadius.card))
+                        .background(SwipeyTheme.colors.surfaceStrong),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    SwipeyIcon(
+                        SwipeyIcons.Shuffle,
+                        contentDescription = null,
+                        tint = SwipeyTheme.colors.textSecondary,
+                        size = 20.dp,
+                    )
+                }
+            },
+        )
+
+        PairTile(
+            title = Copy.HOME_RECENT,
+            subtitle = when {
+                resume == null -> Copy.HOME_RECENT_NONE
+                resume.point.shuffle -> Copy.HOME_RECENT_SHUFFLE
+                // The album it was, not the album this photograph happens to live in: a
+                // whole-library pass reaches every album, and naming one of them would be
+                // describing a queue the tap will not deal.
+                resume.point.bucketId == null -> Copy.HOME_ALL_MEDIA
+                else -> resume.item.bucketName
+            },
+            onClick = resume?.let { { onResume(it.point) } },
+            onClickLabel = Copy.HOME_RECENT_ACTION,
+            modifier = Modifier.weight(1f),
+            leading = {
+                if (resume != null) {
+                    MediaThumb(resume.item.id, resume.item.isVideo, PairThumb)
+                } else {
+                    Box(
+                        Modifier
+                            .size(PairThumb)
+                            .clip(RoundedCornerShape(SwipeyRadius.card))
+                            .background(SwipeyTheme.colors.surfaceStrong),
+                    )
+                }
+            },
+        )
+    }
 }
+
+/**
+ * Half a row: a square, a name, and a line about it.
+ *
+ * Not [SwipeyRow] with a width constraint. That row is built to run the width of the page —
+ * it carries a chevron, a divider and a trailing slot, and all three read as "this is a list"
+ * rather than "this is a card". At half width the chevron alone would take a fifth of the
+ * space the subtitle needs.
+ *
+ * A null [onClick] is the unavailable state: dimmed to [SwipeyDisabledAlpha] and inert, with
+ * no click semantics at all, so a screen reader is not offered a button that does nothing.
+ */
+@Composable
+private fun PairTile(
+    title: String,
+    subtitle: String,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    onClickLabel: String? = null,
+    leading: @Composable () -> Unit,
+) {
+    val colors = SwipeyTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+
+    Row(
+        modifier
+            .clip(RoundedCornerShape(SwipeyRadius.card))
+            // The pressed state dims the ground rather than scaling, exactly as SwipeyRow
+            // does — the two are read as siblings and should answer a thumb the same way.
+            .background(if (pressed) colors.surfaceStrong else colors.surface)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        role = Role.Button,
+                        onClickLabel = onClickLabel,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier.alpha(SwipeyDisabledAlpha)
+                },
+            )
+            .padding(SwipeySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leading()
+        Spacer(Modifier.width(SwipeySpacing.sm))
+        Column(Modifier.weight(1f)) {
+            SwipeyText(
+                title,
+                style = SwipeyTheme.typography.body,
+                color = colors.textPrimary,
+                maxLines = 1,
+            )
+            SwipeyText(
+                subtitle,
+                style = SwipeyTheme.typography.label,
+                color = colors.textSecondary,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** The square on a half-width tile. Smaller than [ThumbSize], which a full-width row can afford. */
+private val PairThumb = 44.dp
 
 // ---------------------------------------------------------------------------
 // Albums
 // ---------------------------------------------------------------------------
+
+/**
+ * The section heading, with the layout toggle on its right.
+ *
+ * The toggle used to live up in the app header beside the wordmark, which put it about as
+ * far as it could get from the only thing it changes and made it look like a screen-level
+ * control — Home's one setting, next to Home's title. Sitting at the end of the "Albums"
+ * line it reads as what it is: this list's own switch. That also retires the
+ * `showToggle` flag it needed up there, because this heading is only composed on the
+ * branch where there are albums to lay out.
+ *
+ * It is drawn at [ToggleSize] rather than the app's usual 48dp so it sits *under* the
+ * heading's weight instead of beside it; [SwipeyIconButton] still hands it a 48dp target.
+ */
+@Composable
+private fun AlbumsHeader(albumsAsGrid: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            // Trimmed from the xl/sm this heading carried as a lone line of text: the
+            // control's invisible touch box is 16dp taller than the words, and letting it
+            // eat that much of the gap keeps the run of albums where it was on the page.
+            .padding(top = SwipeySpacing.lg, bottom = SwipeySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SwipeyText(
+            Copy.HOME_ALBUMS,
+            // Takes the slack so the toggle stays pinned right as the heading grows with
+            // the user's font scale.
+            modifier = Modifier.weight(1f),
+            style = SwipeyTheme.typography.title,
+            color = SwipeyTheme.colors.textPrimary,
+        )
+        // The glyph shows the layout the next tap goes *to*, and the description says so
+        // out loud — a toggle whose icon means "you are here" and one whose icon means
+        // "tap for this" are indistinguishable without it.
+        SwipeyIconButton(
+            icon = if (albumsAsGrid) SwipeyIcons.ListRows else SwipeyIcons.Grid,
+            contentDescription = if (albumsAsGrid) Copy.HOME_SHOW_LIST else Copy.HOME_SHOW_GRID,
+            onClick = { onToggle(!albumsAsGrid) },
+            size = ToggleSize,
+            iconSize = ToggleIcon,
+        )
+    }
+}
 
 @Composable
 private fun AlbumRow(album: Album, onPick: (Album) -> Unit, divider: Boolean) {
@@ -546,31 +787,57 @@ private fun LazyItemScope.HomeMessage(
 // ---------------------------------------------------------------------------
 
 /**
- * The Bin is deliberately last and behind its own rule: it is the only row on this screen
- * that doesn't start a session.
+ * Everything on this screen that is not a way into a session.
+ *
+ * Which is the reason it is a drawer rather than more of the page. Home's whole body — the
+ * hero, the shuffle row, the albums — answers one question, "what am I about to swipe
+ * through", and the Bin used to sit at the foot of that list answering a different one.
+ * Moving it behind the burger leaves the page saying one thing, and costs the Bin nothing:
+ * its count travels with it and is read here exactly as it was read there.
+ *
+ * Settings is listed and disabled rather than omitted — see [Copy.MENU_SETTINGS].
  */
 @Composable
-private fun BinFooter(binCount: Int, onBin: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = SwipeySpacing.md, bottom = SwipeySpacing.lg),
-    ) {
-        SwipeyDivider()
+private fun HomeMenu(
+    visible: Boolean,
+    binCount: Int,
+    onDismiss: () -> Unit,
+    onBin: () -> Unit,
+) {
+    SwipeyDrawer(visible = visible, onDismiss = onDismiss, title = Copy.MENU_TITLE) {
         SwipeyRow(
             title = Copy.HOME_BIN,
             trailing = Copy.homeBinSubtitle(binCount),
             onClick = onBin,
-            divider = false,
             leading = {
                 SwipeyIcon(
                     SwipeyIcons.Bin,
                     // Decorative: the row is titled "Bin" right beside it.
                     contentDescription = null,
                     tint = SwipeyTheme.colors.textSecondary,
-                    size = 20.dp,
+                    size = MenuIcon,
+                )
+            },
+        )
+        SwipeyRow(
+            title = Copy.MENU_SETTINGS,
+            subtitle = Copy.MENU_SETTINGS_SOON,
+            // No onClick at all rather than a disabled one: a row that cannot be pressed
+            // should not be press-feedback-capable, and this way it also loses the chevron,
+            // which is what stops it looking like a row that has stopped working.
+            enabled = false,
+            divider = false,
+            leading = {
+                SwipeyIcon(
+                    SwipeyIcons.Settings,
+                    contentDescription = null,
+                    tint = SwipeyTheme.colors.textSecondary,
+                    size = MenuIcon,
                 )
             },
         )
     }
 }
+
+/** The glyph beside a menu row. A shade under the 24dp default, to sit under the title. */
+private val MenuIcon = 20.dp

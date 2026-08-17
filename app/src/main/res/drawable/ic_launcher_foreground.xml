@@ -1,69 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The Split — Swipey's mark, as the foreground layer of the adaptive icon.
+  Swipey's mark — the Flick — as the launcher icon's foreground.
 
-  One photograph, cut on a near-vertical diagonal and pulled apart: the grey half is the
-  bin, the blue half is keep. It states the app's outcome rather than its gesture.
+  One card already leaving, and the two strokes it left behind. It is the verb rather than
+  the noun: the app is not a pile of photographs, it is the act of getting through one. The
+  card leans 13°, which is near enough the tilt the deck itself gives a card under a
+  dragging thumb.
 
-  ## Sizing — the part that is easy to get wrong
+  ## Geometry
+  The rotation is baked into the coordinates rather than expressed as a <group> transform,
+  and that is deliberate. These same paths appear three times — here, in
+  ic_launcher_monochrome.xml, and as a Compose ImageVector in ui/design/Mark.kt — and a
+  transform that one of the three applied differently would be a drift nothing could catch.
+  Flat coordinates compare as values, which is what MarkGeometryTest does with them.
 
-  The canvas is 108x108dp, but a launcher only ever shows the central 72x72dp of it, and
-  it shows that region through a mask. Masks are not squares. Two circles govern:
+  Every arc is a minor arc with the sweep flag set, and MarkGeometryTest relies on that to
+  locate each corner's centre and prove the ink stays inside the 33dp circle every launcher
+  mask is guaranteed to show. The card's furthest ink reaches 27.4dp of that 33dp budget.
 
-    r = 36dp  the largest area any mask can show (a 72dp circle)
-    r = 33dp  the area EVERY mask is guaranteed to show (a 66dp circle)
-
-  An earlier cut of this file sized the mark to 64x59dp and let its corners reach r=38.9.
-  On a squircle-masked launcher that looked as drawn; on a circle-masked one — which is
-  what the device this was built for actually uses — the mask deleted all four corner radii
-  outright, plus a slice off each side edge, and what survived was two flat slabs and a
-  black bar. The rounded-rectangle silhouette is the entire reason the mark reads as a
-  photograph, so clipping it does not soften the mark, it erases its meaning.
-
-  So the shape is now contained rather than full-bleed:
-
-    card      46 x 52dp, centred on (54,54) — x 31..77, y 28..80
-    corners   r = 12dp, arc centres at (43,40) (65,40) (43,68) (65,68)
-    reach     each corner's ink lands 29.8dp from centre — 3.2dp inside the 33dp circle
-
-  Every mask shows this whole, and the ground stays visible all the way around, which is
-  what gives the icon air next to its neighbours.
-
-  ## The gap
-
-  6dp, measured horizontally at both the top and bottom edge so the cut stays parallel
-  rather than tapering; the cut leans 5dp over the card's height, because dead vertical
-  reads as a battery or a progress bar. That gap is also the ONLY thing separating the two
-  halves in ic_launcher_monochrome.xml once the system flattens them to one tint — do not
-  narrow it.
+  That margin is the artwork's size, not a safety factor left over from drawing it. The first
+  cut of this mark sat at 32.25dp — inside the circle, and still wrong: it crowded every mask
+  it survived, and on a squircle the card's corner ran almost into the tile's own. A launcher
+  icon is read at 48dp among forty others, and the space around a mark is what separates it
+  from its neighbours. Uniformly scaled to 85% about the canvas centre, radii included, so it
+  is the same shape and not a redrawn one.
 
   ## Colours
-
   Literals, not @color references, and deliberately so: a launcher icon must not follow the
   device's light/dark setting, and a values-night override would make it do exactly that.
 
-  The keep half is SwipeyLightColors.keep. The bin half is icon-specific and lighter than
-  SwipeyLightColors.bin (#6B7076): that token is tuned for small text on a surface, and at
-  46dp a flat area of it sits as dark as the blue, so the two halves fight instead of one
-  leading. Optical sizing, not a drift.
-
-  ui/design/Mark.kt draws the same two paths in Compose for the in-app lockup, translated
-  to the card's own origin. MarkGeometryTest keeps the three copies honest.
+  The card is the app's textPrimary and the trails its textDisabled, on the canvas — the
+  "paper on ink" scheme. There is no accent here at all: Swipey spends its one blue on
+  *keep*, inside the app, and an icon that also used it would be spending it on nothing.
+  The trails sit at about 2.5:1 on the ground, which is far too little for text and right
+  for these — they are a wake, and a wake that competed with the card would be a second
+  subject.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Bin half. -->
+    <!-- The trails. Longer one first, nearer the card's path. #5A5F66 — textDisabled. -->
     <path
-        android:fillColor="#9AA0A7"
-        android:pathData="M43,28 H53.5 L48.5,80 H43 A12,12 0 0 1 31,68 V40 A12,12 0 0 1 43,28 Z" />
-
-    <!-- Keep half. #1D51D6 — SwipeyLightColors.keep. -->
+        android:fillColor="#5A5F66"
+        android:pathData="M31.371,46.35 H40.721 A2.55,2.55 0 0 1 40.721,51.45 H31.371 A2.55,2.55 0 0 1 31.371,46.35 Z" />
     <path
-        android:fillColor="#1D51D6"
-        android:pathData="M59.5,28 H65 A12,12 0 0 1 77,40 V68 A12,12 0 0 1 65,80 H54.5 Z" />
-
+        android:fillColor="#5A5F66"
+        android:pathData="M36.471,58.25 H40.721 A2.55,2.55 0 0 1 40.721,63.35 H36.471 A2.55,2.55 0 0 1 36.471,58.25 Z" />
+    <!-- The card, leaning 13°. #FAFAFA — textPrimary. -->
+    <path
+        android:fillColor="#FAFAFA"
+        android:pathData="M62.643,35.683 L74.238,38.36 A6.375,6.375 0 0 1 79.016,46.006 L74.044,67.539 A6.375,6.375 0 0 1 66.399,72.317 L54.804,69.64 A6.375,6.375 0 0 1 50.026,61.994 L54.997,40.461 A6.375,6.375 0 0 1 62.643,35.683 Z" />
 </vector>

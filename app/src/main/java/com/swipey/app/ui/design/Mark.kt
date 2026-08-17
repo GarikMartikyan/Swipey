@@ -23,10 +23,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /*
- * The Split — Swipey's mark, for use inside the app.
+ * The Flick — Swipey's mark, for use inside the app.
  *
- * One photograph cut on a near-vertical diagonal and pulled apart: the grey half is the
- * bin, the blue half is keep. The same two shapes are the launcher icon's foreground
+ * One card already leaving, and the two strokes it left behind. It is the verb rather than
+ * the noun: the app is not a pile of photographs, it is the act of getting through one. The
+ * card leans 13°, near enough the tilt the deck gives a card under a dragging thumb.
+ *
+ * The same three shapes are the launcher icon's foreground
  * (`res/drawable/ic_launcher_foreground.xml`), and the same shapes flattened to one colour
  * are its monochrome layer.
  *
@@ -35,30 +38,44 @@ import androidx.compose.ui.unit.dp
  * and a different aspect. Putting it there would break the one property that makes an icon
  * set look like a set.
  *
- * ## Two copies of one shape
+ * ## No accent, on purpose
+ *
+ * The mark used to be grey and blue — a card cut in half, the bin and keep. It carries no
+ * accent now. Swipey spends its one blue on a single meaning, *keep*, at the moment a
+ * decision is made; a logo that also wore it would be spending it on nothing, and would make
+ * the blue mean "Swipey" as well as "kept". The mark is ink and a muted neutral instead, and
+ * the accent stays where it earns its keep.
+ *
+ * What that costs is the palette flipping with the theme, which the launcher icon must not
+ * do — see `values/colors.xml`. There the pair is fixed at the dark palette's values, which
+ * is where "paper on ink" comes from.
+ *
+ * ## Three copies of one shape
  *
  * The coordinates below are the launcher artwork's, shifted to the origin: the icon is
  * drawn on a 108×108 canvas with the mark inset to survive adaptive-icon masking, and that
- * padding is exactly what an in-app logo must not carry. Cropping to the shape's own bounds
+ * padding is exactly what an in-app logo must not carry. Cropping to the shape's own ink
  * gives the [ViewportWidth]×[ViewportHeight] box here, so a caller who asks for a 28dp-tall
  * mark gets 28dp of ink rather than 28dp of mostly-empty canvas.
  *
  * The duplication is real and worth naming: change the geometry here and the two icon
  * drawables must change with it. There is no way to share one path between a Compose
  * [ImageVector] and an aapt-compiled `<vector>` without generating one from the other at
- * build time, which is more machinery than a six-segment shape deserves.
+ * build time, which is more machinery than three shapes deserve. `MarkGeometryTest` reads
+ * all three off disk instead and refuses to let them drift.
  */
 
 /**
- * The card's own bounding box.
+ * The mark's own bounding box — its **ink**, not its vertices.
  *
- * The launcher artwork draws this same card at x 31..77, y 28..80 on a 108x108 canvas — the
- * inset that keeps it inside every adaptive-icon mask. In the app there is no mask and no
- * safe zone, so the coordinates below are those minus (31, 28): a caller who asks for a
- * 28dp-tall mark gets 28dp of ink rather than 28dp of mostly-empty canvas.
+ * The distinction did not exist while the mark was one upright rounded rectangle, whose
+ * corner tangent points sit exactly at its extremes. The card leans now, so its widest ink
+ * is out on a corner arc, past every point the path actually names. A viewport measured from
+ * the vertices would be a fraction too small and would shave those corners — which is the
+ * one thing a rounded silhouette cannot survive.
  */
-private const val ViewportWidth = 46f
-private const val ViewportHeight = 52f
+private const val ViewportWidth = 50.358f
+private const val ViewportHeight = 36.96f
 
 /** Width per unit of height. Callers size by height; the mark is slightly wider than tall. */
 private const val AspectRatio = ViewportWidth / ViewportHeight
@@ -77,12 +94,15 @@ private const val AspectRatio = ViewportWidth / ViewportHeight
  */
 @Composable
 fun SwipeyMark(height: Dp, modifier: Modifier = Modifier) {
-    val bin = SwipeyTheme.colors.bin
-    val keep = SwipeyTheme.colors.keep
+    // The card is the loudest ink the palette has and the trails are its quietest neutral,
+    // which is the whole scheme: one bright card, and a wake that is barely there. In the
+    // dark palette that pair is #FAFAFA on #5A5F66 — exactly the launcher artwork's.
+    val trail = SwipeyTheme.colors.textDisabled
+    val card = SwipeyTheme.colors.textPrimary
 
     // Keyed on both colours: the palette swaps when the system flips to dark, and the
     // vector bakes its fills in at build time rather than tinting at draw time.
-    val mark = remember(bin, keep) { buildMark(bin, keep) }
+    val mark = remember(trail, card) { buildMark(trail, card) }
 
     Image(
         imageVector = mark,
@@ -94,12 +114,19 @@ fun SwipeyMark(height: Dp, modifier: Modifier = Modifier) {
 /**
  * Builds the two-tone [ImageVector].
  *
- * The halves are 6dp apart at the top edge and 6dp apart at the bottom — a gap that stays
- * parallel rather than tapering is what stops the cut reading as a wedge. That gap is also
- * the only thing separating the halves once the launcher flattens the mark to one colour,
- * which is why it is generous.
+ * Three paths, in the order the launcher artwork declares them — the two trails, then the
+ * card — because `MarkGeometryTest` compares them positionally against the XML.
+ *
+ * The trails stop well short of the card rather than touching it. That gap is what carries
+ * the shape once the launcher flattens all three to a single colour for a themed icon: three
+ * separate shapes still read as a card with something behind it, where three joined ones
+ * would read as a blob.
+ *
+ * The card's rotation is baked into its coordinates rather than applied as a `group`
+ * transform. A transform would be a fourth thing that could be expressed differently here
+ * than in the XML, and flat coordinates are what let a test compare the two as values.
  */
-private fun buildMark(binColor: Color, keepColor: Color): ImageVector =
+private fun buildMark(trailColor: Color, cardColor: Color): ImageVector =
     ImageVector.Builder(
         name = "SwipeyMark",
         defaultWidth = ViewportWidth.dp,
@@ -107,26 +134,37 @@ private fun buildMark(binColor: Color, keepColor: Color): ImageVector =
         viewportWidth = ViewportWidth,
         viewportHeight = ViewportHeight,
     ).apply {
-        // Bin half: the left piece, square down the cut and rounded on the outside.
-        path(fill = SolidColor(binColor)) {
-            moveTo(12f, 0f)
-            horizontalLineTo(22.5f)
-            lineTo(17.5f, 52f)
-            horizontalLineTo(12f)
-            arcTo(12f, 12f, 0f, false, true, 0f, 40f)
-            verticalLineTo(12f)
-            arcTo(12f, 12f, 0f, false, true, 12f, 0f)
+        // The long trail, nearest the card's path.
+        path(fill = SolidColor(trailColor)) {
+            moveTo(2.55f, 10.83f)
+            horizontalLineTo(11.9f)
+            arcTo(2.55f, 2.55f, 0f, false, true, 11.9f, 15.93f)
+            horizontalLineTo(2.55f)
+            arcTo(2.55f, 2.55f, 0f, false, true, 2.55f, 10.83f)
             close()
         }
 
-        // Keep half: the mirror, carrying the accent.
-        path(fill = SolidColor(keepColor)) {
-            moveTo(28.5f, 0f)
-            horizontalLineTo(34f)
-            arcTo(12f, 12f, 0f, false, true, 46f, 12f)
-            verticalLineTo(40f)
-            arcTo(12f, 12f, 0f, false, true, 34f, 52f)
-            horizontalLineTo(23.5f)
+        // The short one, further back and further out.
+        path(fill = SolidColor(trailColor)) {
+            moveTo(7.65f, 22.73f)
+            horizontalLineTo(11.9f)
+            arcTo(2.55f, 2.55f, 0f, false, true, 11.9f, 27.83f)
+            horizontalLineTo(7.65f)
+            arcTo(2.55f, 2.55f, 0f, false, true, 7.65f, 22.73f)
+            close()
+        }
+
+        // The card, leaning 13°.
+        path(fill = SolidColor(cardColor)) {
+            moveTo(33.822f, 0.163f)
+            lineTo(45.417f, 2.84f)
+            arcTo(6.375f, 6.375f, 0f, false, true, 50.195f, 10.486f)
+            lineTo(45.223f, 32.019f)
+            arcTo(6.375f, 6.375f, 0f, false, true, 37.578f, 36.797f)
+            lineTo(25.983f, 34.12f)
+            arcTo(6.375f, 6.375f, 0f, false, true, 21.205f, 26.474f)
+            lineTo(26.176f, 4.941f)
+            arcTo(6.375f, 6.375f, 0f, false, true, 33.822f, 0.163f)
             close()
         }
     }.build()

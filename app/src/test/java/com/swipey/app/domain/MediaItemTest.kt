@@ -1,6 +1,7 @@
 package com.swipey.app.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MediaItemTest {
@@ -143,5 +144,26 @@ class MediaItemTest {
         )
         // Biggest-first, so Screenshots (500 bytes) leads Camera (100).
         assertEquals(listOf(2L, 1L), items.toAlbums().map { it.coverId })
+    }
+
+    // --- megapixels: what the info sheet states about a photograph's dimensions ---
+
+    @Test fun megapixelsMultipliesTheTwoDimensions() {
+        val item = item(1, 10, 100).copy(widthPx = 4032, heightPx = 3024)
+        // 4032 * 3024 = 12,192,768 px.
+        assertEquals(12.192768, item.megapixels()!!, 1e-9)
+    }
+
+    @Test fun megapixelsIsNullWhenEitherDimensionIsMissing() {
+        val base = item(1, 10, 100)
+        assertNull(base.megapixels())
+        assertNull(base.copy(widthPx = 4032).megapixels())
+        assertNull(base.copy(heightPx = 3024).megapixels())
+    }
+
+    @Test fun megapixelsIgnoresOrientation() {
+        val landscape = item(1, 10, 100).copy(widthPx = 4032, heightPx = 3024)
+        val portrait = item(1, 10, 100).copy(widthPx = 3024, heightPx = 4032)
+        assertEquals(landscape.megapixels()!!, portrait.megapixels()!!, 1e-9)
     }
 }

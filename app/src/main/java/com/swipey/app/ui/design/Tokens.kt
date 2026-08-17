@@ -22,12 +22,25 @@ import androidx.compose.ui.unit.sp
  * shadows anywhere. There is no `MaterialTheme` in the tree.
  *
  * ### Signal
- * The palette is near-monochrome and carries exactly **one** hue: an electric blue, spent
- * only on *keep*. There is no red in this file and there is no second accent. Binning is
- * not a colour at all — the deck states it with a glyph on a neutral ground, because a
- * binned photo goes to the system trash and comes back from the in-app Bin, and an
- * interface that flashes a warning at the one action the app exists to make easy is
- * scolding the user for using it. See [SwipeyColors.bin].
+ * The palette is near-monochrome and carries exactly **one** accent: an electric blue,
+ * spent only on *keep*. Binning is not an accent at all — a binned photo goes to the system
+ * trash and comes back from the in-app Bin, and an interface that flashes a warning at the
+ * one action the app exists to make easy is scolding the user for using it. That is why
+ * [SwipeyColors.bin] is a neutral, why the Review screen's commit button is not red, and
+ * why the launcher icon is blue and grey.
+ *
+ * ### The two signal colours are separate, and narrow
+ * [SwipeyColors.keepSignal] and [SwipeyColors.binSignal] — a green and a red — exist
+ * *alongside* that scheme rather than replacing any of it. They are confined to the moment
+ * of deciding: the badge that grows under a dragging thumb, the two controls beneath the
+ * card, and the decided thumbnails in the strip. Nowhere else may use them.
+ *
+ * The split is the point. Green and red are the two colours a user arrives already knowing,
+ * and the deck is read at speed with the eye on the photograph, so the decision has to land
+ * in peripheral vision before any glyph is resolved. Everywhere *else* in the app there is
+ * time to read, no thumb in flight, and nothing gained by shouting — so everywhere else
+ * keeps the quiet palette. A red that appears on one screen and never again is a signal; a
+ * red sprayed across every destructive-looking control is decoration.
  *
  * Everything is reached through the [SwipeyTheme] object — `SwipeyTheme.colors.keep`,
  * `SwipeyTheme.typography.title` — mirroring the shape Compose users already expect,
@@ -62,8 +75,16 @@ import androidx.compose.ui.unit.sp
  *   *control* cannot use hue to look interactive, so it uses treatment instead: see
  *   [SwipeyTone] for the ring-and-ground that does the job, and [SwipeyDisabledAlpha] for
  *   what keeps it from reading as disabled.
+ * @property keepSignal the green of the *decision*, not of the accent. Used only where a
+ *   keep is being made or shown back: the drag badge, the deck's Keep control, and a kept
+ *   thumbnail in the filmstrip. It does not replace [keep], which stays the app's one
+ *   accent everywhere else — the two coexist deliberately, and the reasons are in the file
+ *   header above.
+ * @property binSignal the red half of the same pair, under the same restriction. The only
+ *   red in the app; if it ever appears on a screen that is not the deck, that is a bug.
  * @property onAccent ink that sits legibly on [keep] or an inverted neutral fill. Not
- *   automatically the right ink on [bin], which is a mid neutral — see [SwipeyTone].
+ *   automatically the right ink on [bin], which is a mid neutral — see [SwipeyTone]. It is
+ *   the right ink on both signals, which are tuned to carry it.
  * @property scrim the dim behind sheets and dialogs.
  * @property isDark which of the two palettes this is; lets a component branch when a
  *   mirrored value genuinely can't be expressed as a token (e.g. status-bar icons).
@@ -79,6 +100,8 @@ data class SwipeyColors(
     val textDisabled: Color,
     val keep: Color,
     val bin: Color,
+    val keepSignal: Color,
+    val binSignal: Color,
     val onAccent: Color,
     val scrim: Color,
     val isDark: Boolean,
@@ -108,6 +131,14 @@ val SwipeyDarkColors = SwipeyColors(
     keep = Color(0xFF2F6BFF),
     // Not a colour decision so much as a refusal to make one — see the property doc.
     bin = Color(0xFF8B9097),
+    // The decision pair. Both sit at 55% saturation and at the same lightness as each
+    // other — muted enough that a deck of photographs stays the loudest thing on screen,
+    // separated enough to be told apart at a glance. Their lightness is not free: on a
+    // ground this dark, "the disc reads against the page" and "white reads against the
+    // disc" are locked together, and roughly 4.25:1 / 4.5:1 is the only split that gets
+    // both. Tune saturation here, never lightness.
+    keepSignal = Color(0xFF3C845A),
+    binSignal = Color(0xFFBE5659),
     onAccent = Color(0xFFFFFFFF),
     scrim = Color(0x99000000),
     isDark = true,
@@ -137,6 +168,12 @@ val SwipeyLightColors = SwipeyColors(
     textDisabled = Color(0xFFA0A4AA),
     keep = Color(0xFF1D51D6),
     bin = Color(0xFF6B7076),
+    // Walked darker for the same reason [keep] is, and defined here for completeness rather
+    // than for use: the deck draws itself in the dark palette whatever the system setting,
+    // because what sits behind these is a photograph and not the page. If a light-theme
+    // screen ever needs them, these are the values that carry white ink on white paper.
+    keepSignal = Color(0xFF2F6847),
+    binSignal = Color(0xFF964446),
     onAccent = Color(0xFFFFFFFF),
     scrim = Color(0x66000000),
     isDark = false,

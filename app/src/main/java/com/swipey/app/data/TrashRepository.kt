@@ -99,6 +99,31 @@ class TrashRepository(
         }
 
     /**
+     * The one irreversible thing the app can ask for: emptying items out of the trash for
+     * good.
+     *
+     * Deliberately has no `prepareDelete` twin, and writes no PENDING_ row — which is the
+     * one place this direction is *simpler* than the other two rather than more dangerous.
+     * The bookkeeping exists to answer "did the thing I asked for actually happen", and for
+     * trash and restore that question is genuinely hard: the row survives either way and
+     * only a flag distinguishes the outcomes. A deletion answers itself. The row is gone, so
+     * [verifyAndResolve] finds no live media for the record, resolves it to
+     * [Resolution.Vanished] and drops it — exactly the path it already takes for an item
+     * deleted from Google Photos, because from this app's side those two events are the same
+     * event. A cancelled dialog leaves the row untouched and the record stays trashed.
+     *
+     * MediaStore shows its own confirmation, and it is the only confirmation there is:
+     * nothing here can be undone afterwards, by this app or any other.
+     */
+    fun buildDeleteRequests(records: List<LocalTrashRecord>): List<PendingIntent> =
+        records.chunkedForRequest().map { chunk ->
+            MediaStore.createDeleteRequest(
+                resolver,
+                chunk.map { contentUriFor(it.mediaId, it.isVideo) },
+            )
+        }
+
+    /**
      * I1: collapses markPendingTrash + buildTrashRequests into one suspend call so the
      * PendingIntent cannot be obtained before the durable row is committed. A caller that
      * calls the two steps separately from a non-coroutine call site (e.g. a Compose

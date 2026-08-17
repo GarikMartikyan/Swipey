@@ -148,6 +148,61 @@ object SwipeyIcons {
         close()
     }
 
+    /**
+     * Pause. Two uprights, at the same optical width as [Play]'s triangle.
+     *
+     * Inset to 8.5 and 15.5 rather than the 8..19 the triangle spans: a pair of verticals
+     * reads wider than a triangle of the same bounding box, because the triangle's mass
+     * falls away to a point on one side and the bars' does not. Matching the boxes would
+     * have made this the heavier of the two, and they swap places under a thumb.
+     */
+    val Pause: ImageVector = icon("Pause") {
+        moveTo(9.5f, 5.5f)
+        lineTo(9.5f, 18.5f)
+        moveTo(15.5f, 5.5f)
+        lineTo(15.5f, 18.5f)
+    }
+
+    /**
+     * Sound on. A speaker cone and two arcs.
+     *
+     * The cone is one closed path rather than a box plus a triangle, so the join where the
+     * throat meets the body is a corner of the shape instead of two strokes crossing —
+     * which at 20dp is the difference between a speaker and a smudge. Two arcs, not three:
+     * the third is what the set's stroke weight cannot fit inside 24 units without the
+     * waves touching.
+     */
+    val SoundOn: ImageVector = icon("SoundOn") {
+        moveTo(4f, 9.5f)
+        lineTo(7.5f, 9.5f)
+        lineTo(11.5f, 5.5f)
+        lineTo(11.5f, 18.5f)
+        lineTo(7.5f, 14.5f)
+        lineTo(4f, 14.5f)
+        close()
+        // Arcs, like every other curve in the set — the radii are what set how far each
+        // wave bows out, and both are drawn as half-circles so the pair stays concentric.
+        moveTo(14.8f, 9.4f)
+        arcTo(3.4f, 3.4f, 0f, false, true, 14.8f, 14.6f)
+        moveTo(17.4f, 6.6f)
+        arcTo(6.6f, 6.6f, 0f, false, true, 17.4f, 17.4f)
+    }
+
+    /** Sound off. [SoundOn]'s cone, with the arcs struck through — the same cross as [Close]. */
+    val SoundOff: ImageVector = icon("SoundOff") {
+        moveTo(4f, 9.5f)
+        lineTo(7.5f, 9.5f)
+        lineTo(11.5f, 5.5f)
+        lineTo(11.5f, 18.5f)
+        lineTo(7.5f, 14.5f)
+        lineTo(4f, 14.5f)
+        close()
+        moveTo(15.5f, 9.5f)
+        lineTo(20.5f, 14.5f)
+        moveTo(20.5f, 9.5f)
+        lineTo(15.5f, 14.5f)
+    }
+
     /** Close. Two crossing strokes, inset to sit optically level with the chevrons. */
     val Close: ImageVector = icon("Close") {
         moveTo(6f, 6f)
@@ -210,6 +265,35 @@ object SwipeyIcons {
      * direction, which matters because the chooser behind it offers four orders, two of
      * which run the other way.
      */
+    /**
+     * Shuffle. Two paths that cross, each ending in an arrowhead.
+     *
+     * The crossing is the whole glyph: two routes that swap places say "reordered" in a way
+     * no single arrow can. Both heads point the same way so it reads as a direction of
+     * travel rather than as an exchange between two things.
+     */
+    val Shuffle: ImageVector = icon("Shuffle") {
+        // Lower route, rising to the top-right exit.
+        moveTo(3f, 17f)
+        lineTo(7f, 17f)
+        lineTo(10.5f, 13.5f)
+        moveTo(13.5f, 10.5f)
+        lineTo(17f, 7f)
+        lineTo(21f, 7f)
+        // Upper route, falling to the bottom-right exit.
+        moveTo(3f, 7f)
+        lineTo(7f, 7f)
+        lineTo(17f, 17f)
+        lineTo(21f, 17f)
+        // The two heads.
+        moveTo(18f, 4f)
+        lineTo(21f, 7f)
+        lineTo(18f, 10f)
+        moveTo(18f, 14f)
+        lineTo(21f, 17f)
+        lineTo(18f, 20f)
+    }
+
     val Sort: ImageVector = icon("Sort") {
         moveTo(4f, 6.5f)
         lineTo(20f, 6.5f)
@@ -217,6 +301,49 @@ object SwipeyIcons {
         lineTo(15f, 12f)
         moveTo(4f, 17.5f)
         lineTo(10f, 17.5f)
+    }
+
+    /**
+     * Menu — Home's drawer.
+     *
+     * Three lines of *equal* length, on the same rows as [Sort]'s three of decreasing
+     * length. That is the only thing separating the two glyphs and it is enough, because
+     * "all the same" and "getting shorter" are read as shapes long before either is read as
+     * lines: one is a block, the other a wedge. They are also never adjacent — this sits in
+     * the header, [Sort] on the hero card below it — and the ragged edge of a sort glyph is
+     * exactly what a menu must not have, since a menu promises nothing about order.
+     */
+    val Menu: ImageVector = icon("Menu") {
+        moveTo(4f, 6.5f)
+        lineTo(20f, 6.5f)
+        moveTo(4f, 12f)
+        lineTo(20f, 12f)
+        moveTo(4f, 17.5f)
+        lineTo(20f, 17.5f)
+    }
+
+    /**
+     * Settings. Two upright tracks, each with a knob, set at different heights.
+     *
+     * Sliders rather than a gear, and *upright* sliders rather than the usual lying-down
+     * ones. A gear at 20dp is a ring with a texture nobody can resolve; sliders survive the
+     * size because they are four strokes. Turning them on end is what keeps this set legible
+     * as a set — [Sort], [ListRows] and [Menu] are already three different arrangements of
+     * horizontal lines, and a fourth would have been the one glyph too many.
+     */
+    val Settings: ImageVector = icon("Settings") {
+        moveTo(9f, 4f)
+        lineTo(9f, 20f)
+        moveTo(15f, 4f)
+        lineTo(15f, 20f)
+        // The knobs, high on the first track and low on the second, so the glyph reads as
+        // two things set to two values rather than as a symmetrical ornament.
+        moveTo(6.8f, 8.5f)
+        arcTo(2.2f, 2.2f, 0f, true, true, 11.2f, 8.5f)
+        arcTo(2.2f, 2.2f, 0f, true, true, 6.8f, 8.5f)
+        moveTo(12.8f, 15.5f)
+        arcTo(2.2f, 2.2f, 0f, true, true, 17.2f, 15.5f)
+        arcTo(2.2f, 2.2f, 0f, true, true, 12.8f, 15.5f)
     }
 
     /**

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,11 +64,26 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * What Swipey put in the system trash, and the one thing it can do about it: put it back.
+ * What Swipey put in the system trash, and the two things it can now do about it: put it
+ * back, or end it.
  *
- * There is no delete here, and there is no "empty bin" — not disabled, not hidden behind
- * a confirm, absent. Swipey has no permanent-delete function at all (spec §9 rule 7), and
- * a screen that looks like it might is a screen that has already lied.
+ * ### The delete, and what changed to allow it
+ * This screen used to have no delete at all — "not disabled, not hidden behind a confirm,
+ * absent", because spec §9 rule 7 said the app could not permanently delete anything, and
+ * a screen that looks like it might is a screen that has already lied. The rule has been
+ * amended rather than quietly broken: [Copy.PERMANENT_DELETE_NOTE] now says what is true,
+ * which is that deleting from here is permanent, that Android asks first, and that nothing
+ * undoes it afterwards. [Copy.BIN_SHORT_NOTE] on the face of the screen changed with it.
+ *
+ * The two buttons are deliberately not peers. Restore is the filled one and keeps the Keep
+ * tone; Delete is a ghost in the Bin tone, so the destructive control is the quieter object
+ * of the pair — findable, never the thing a thumb lands on by default. Neither does
+ * anything without a selection, and MediaStore raises its own confirmation on top.
+ *
+ * ### Select all is scoped to what is on screen
+ * It selects the entries this grid is showing, which is what Swipey trashed. Items other
+ * apps put in the same trash are counted in the footer and never listed here, and a Select
+ * all that reached them would hand Delete a set of photographs the user has never seen.
  *
  * The grid speaks the same language as Review — same tile, same caption — so the two
  * halves of a session read as one place. The difference is what a tap means: here it
@@ -86,14 +102,32 @@ fun BinScreen(viewModel: BinViewModel) {
     // launch, verify, and land back on this same Bin, refreshed. There is no
     // `onRestore` callback for a caller to misroute; Task 20 has nothing to wire wrong.
     var attemptedIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    // Which flow the launcher is currently running. One launcher rather than two, because
+    // only one dialog sequence can be in flight at a time — its own `inFlight` guarantees
+    // that — and because a second launcher would need a second saved queue for a state the
+    // app can never be in. The flag is what the terminal callback reads to decide whether
+    // the report it just verified describes a restore or a deletion; they are counted from
+    // opposite fields of it.
+    var deleteInFlight by rememberSaveable { mutableStateOf(false) }
     val trashLauncher = rememberTrashLauncher(repository = viewModel.repository) { report ->
-        viewModel.onRestoreFinished(attemptedIds, report)
+        if (deleteInFlight) {
+            deleteInFlight = false
+            viewModel.onDeleteFinished(attemptedIds, report)
+        } else {
+            viewModel.onRestoreFinished(attemptedIds, report)
+        }
     }
 
     val colors = SwipeyTheme.colors
     // The soonest any item here stops being recoverable. "At least" is what makes one
     // line honest for the whole grid (rule 3): every item lasts at least this long.
     val earliestExpirySec = state.entries.mapNotNull { it.expiresAtSec }.minOrNull()
+
+    // One in-flight window covering both directions, and the reason it includes
+    // `trashLauncher.inFlight` is spelled out at the Restore button below: a throw after
+    // `start()` has flipped that flag can leave it latched, and a control that re-enabled
+    // on `restoring`/`deleting` alone would offer a retry that silently no-ops.
+    val busy = state.restoring || state.deleting || trashLauncher.inFlight
 
     SwipeyScreen(
         overlay = {
@@ -123,8 +157,22 @@ fun BinScreen(viewModel: BinViewModel) {
                 )
             }
 
+            // Select all sits with the grid rather than with the buttons: it edits the
+            // selection, and everything below the grid acts on one. Absent while there is
+            // nothing to select, for the same reason the marked chip is absent at zero.
+            if (!state.failed && state.entries.isNotEmpty()) {
+                val allSelected = state.selected.size == state.entries.size
+                SwipeyButton(
+                    text = if (allSelected) Copy.BIN_CLEAR else Copy.BIN_SELECT_ALL,
+                    onClick = { viewModel.toggleSelectAll() },
+                    modifier = Modifier.padding(top = SwipeySpacing.sm),
+                    variant = SwipeyButtonVariant.Ghost,
+                    enabled = !busy,
+                )
+            }
+
             Spacer(Modifier.height(SwipeySpacing.md))
-            if (state.loading || state.restoring || trashLauncher.inFlight) {
+            if (state.loading || busy) {
                 SwipeyProgressBar(progress = null)
             } else {
                 Spacer(Modifier.height(SwipeySize.progress))
@@ -224,6 +272,13 @@ fun BinScreen(viewModel: BinViewModel) {
             )
 
             if (!state.failed && state.entries.isNotEmpty()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = SwipeySpacing.sm, bottom = SwipeySpacing.lg),
+                    horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                 SwipeyButton(
                     // "Restore 0" is not a label; before a selection exists the button
                     // says what it is, and only counts once there is something to count.
@@ -250,7 +305,7 @@ fun BinScreen(viewModel: BinViewModel) {
                             }
                         }
                     },
-                    modifier = Modifier.padding(top = SwipeySpacing.sm, bottom = SwipeySpacing.lg),
+                    modifier = Modifier.weight(1f),
                     tone = SwipeyTone.Keep,
                     // F2: disabled for the whole in-flight window, not just until the click
                     // handler returns — beginRestore() is a suspend Room write + binder round
@@ -268,10 +323,52 @@ fun BinScreen(viewModel: BinViewModel) {
                     // both flags, mirroring the trash side's `committing = preparing ||
                     // trashLauncher.inFlight` (SwipeyApp.kt), closes that gap: the button cannot
                     // re-enable while a stuck `inFlight` would make a retry a no-op.
-                    enabled = state.selected.isNotEmpty() && !state.restoring && !trashLauncher.inFlight,
+                    enabled = state.selected.isNotEmpty() && !busy,
                     fillWidth = true,
                     icon = SwipeyIcons.Restore,
                 )
+
+                // The irreversible one, and the quieter of the pair: a ghost in the Bin
+                // tone against Restore's filled Keep. It is the same relationship the deck
+                // draws between its own two decisions — the destructive one is never the
+                // heavier object on the screen.
+                //
+                // No confirmation of its own. MediaStore raises the system delete dialog,
+                // which names the count and is the last word on the subject; a Swipey
+                // dialog in front of it would be a second "are you sure" for one action,
+                // and the app would be asking about something Android is about to ask
+                // about better.
+                SwipeyButton(
+                    text = if (state.selected.isEmpty()) {
+                        Copy.BIN_DELETE
+                    } else {
+                        Copy.binDeleteAction(state.selected.size)
+                    },
+                    onClick = {
+                        attemptedIds = state.selected.toList()
+                        deleteInFlight = true
+                        scope.launch {
+                            // Same shape as the restore side's guard: if start() throws
+                            // before or during the launch, nothing else would ever clear
+                            // `deleting`, and the pair of buttons would stay dead.
+                            try {
+                                trashLauncher.start(viewModel.beginDelete())
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                deleteInFlight = false
+                                viewModel.onDeleteFailed()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    variant = SwipeyButtonVariant.Ghost,
+                    tone = SwipeyTone.Bin,
+                    enabled = state.selected.isNotEmpty() && !busy,
+                    fillWidth = true,
+                    icon = SwipeyIcons.Bin,
+                )
+                }
             }
         }
     }

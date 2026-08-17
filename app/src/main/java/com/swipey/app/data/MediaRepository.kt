@@ -25,6 +25,14 @@ class MediaRepository(private val resolver: ContentResolver) {
         MediaStore.MediaColumns.BUCKET_ID,
         MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
         MediaStore.MediaColumns.DISPLAY_NAME,
+        // Read for the deck's info sheet. All three are `MediaColumns`, so unlike DURATION
+        // they are valid on the Images collection as well as Video and can live in the
+        // shared projection. They are also the reason every read below is index-guarded:
+        // a provider that does not populate them returns 0 or null rather than failing,
+        // and the mapper turns both back into "unknown".
+        MediaStore.MediaColumns.WIDTH,
+        MediaStore.MediaColumns.HEIGHT,
+        MediaStore.MediaColumns.RELATIVE_PATH,
     )
 
     /** Video-only projection: base + DURATION, valid on the Video collection. */
@@ -58,6 +66,9 @@ class MediaRepository(private val resolver: ContentResolver) {
             val bucketIdCol = c.getColumnIndex(MediaStore.MediaColumns.BUCKET_ID)
             val bucketNameCol = c.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
             val nameCol = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+            val widthCol = c.getColumnIndex(MediaStore.MediaColumns.WIDTH)
+            val heightCol = c.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
+            val pathCol = c.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
             while (c.moveToNext()) {
                 mapMediaRow(
                     id = c.getLong(idCol),
@@ -68,6 +79,9 @@ class MediaRepository(private val resolver: ContentResolver) {
                     bucketId = bucketIdCol.takeIf { it >= 0 }?.let { c.getLong(it) } ?: 0L,
                     bucketName = bucketNameCol.takeIf { it >= 0 }?.let { c.getString(it) },
                     displayName = nameCol.takeIf { it >= 0 }?.let { c.getString(it) },
+                    widthPx = widthCol.takeIf { it >= 0 }?.let { c.getIntOrNull(it) },
+                    heightPx = heightCol.takeIf { it >= 0 }?.let { c.getIntOrNull(it) },
+                    relativePath = pathCol.takeIf { it >= 0 }?.let { c.getString(it) },
                 )?.let(items::add)
             }
         }
@@ -136,4 +150,6 @@ class MediaRepository(private val resolver: ContentResolver) {
     }
 
     private fun Cursor.getLongOrNull(index: Int): Long? = if (isNull(index)) null else getLong(index)
+
+    private fun Cursor.getIntOrNull(index: Int): Int? = if (isNull(index)) null else getInt(index)
 }

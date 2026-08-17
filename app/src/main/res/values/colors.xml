@@ -7,17 +7,21 @@
     <color name="swipey_window">#FBFBFD</color>
 
     <!--
-      The ground behind the launcher icon's mark.
+      The ground behind the launcher icon's mark. The app's own canvas, exactly.
 
-      White rather than the app's near-black canvas. The icon has to hold its own in a grid
-      of other icons on a photograph, not match the screen it opens: a dark disc among the
-      light ones every launcher is full of recedes into the wallpaper instead of reading,
-      which is exactly what the first cut of this icon did.
+      This reverses an earlier decision and the reason it was made is worth keeping, because
+      it is a real risk: a dark tile among the light ones a launcher is full of can recede
+      into the wallpaper instead of reading, and an earlier cut of this icon did exactly
+      that. What is different now is where the silhouette lives. That version put a mid-tone
+      mark on the dark ground, so the *tile* had to carry the shape and it had nothing to
+      carry it against. This one puts a near-white card on it at about 18:1 — the ink is the
+      brightest thing in the tile, so the mark reads even where its edge does not, and the
+      icon is a lit card on black rather than a black square with something in it.
 
-      This one must NEVER gain a values-night counterpart. A launcher icon is a fixed piece
-      of artwork: it keeps the same ground whether the phone is in light or dark mode, the
-      same way every other icon on the home screen does. Give it a night override and the
-      app's identity changes shape at sunset.
+      It must NEVER gain a values-night counterpart. A launcher icon is a fixed piece of
+      artwork: it keeps the same ground whether the phone is in light or dark mode, the same
+      way every other icon on the home screen does. Give it a night override and the app's
+      identity changes shape at sunset.
     -->
-    <color name="swipey_icon_ground">#FFFFFF</color>
+    <color name="swipey_icon_ground">#0E0F11</color>
 </resources>

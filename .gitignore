@@ -11,3 +11,6 @@ local.properties
 
 # SDD workspace
 .superpowers/
+
+# Catalog mockup server
+.catalog/

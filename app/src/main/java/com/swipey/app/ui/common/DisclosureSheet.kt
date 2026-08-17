@@ -151,7 +151,7 @@ fun DisclosureSheet(
  *
  * Rule 2 ([Copy.TRASH_SIZE_NOTE]) — trashing frees no bytes.
  * Rule 4 ([Copy.SYSTEM_TRASH_NOTE]) — it is the phone's trash, shared with other apps.
- * Rule 7 ([Copy.NO_PERMANENT_DELETE_NOTE]) — Swipey cannot delete anything for good.
+ * Rule 7 ([Copy.PERMANENT_DELETE_NOTE]) — what it takes to lose one of these for good.
  *
  * @param batches how many consent dialogs the commit will raise; more than one adds
  *   [Copy.multipleConfirmations] so a second dialog is never a surprise.
@@ -159,25 +159,22 @@ fun DisclosureSheet(
 fun reviewDisclosures(batches: Int): List<String> = buildList {
     add(Copy.TRASH_SIZE_NOTE)
     add(Copy.SYSTEM_TRASH_NOTE)
-    add(Copy.NO_PERMANENT_DELETE_NOTE)
+    add(Copy.PERMANENT_DELETE_NOTE)
     if (batches > 1) add(Copy.multipleConfirmations(batches))
 }
-
-/** Result's notes: rules 2, 4 and 7, restated after the fact. */
-fun resultDisclosures(): List<String> = listOf(
-    Copy.TRASH_SIZE_NOTE,
-    Copy.SYSTEM_TRASH_NOTE,
-    Copy.NO_PERMANENT_DELETE_NOTE,
-)
 
 /**
  * The Bin's notes: rules 4, 7, 5 and 2 — in that order, because on this screen
  * "whose trash is this" is the first question and "Android will ask again"
  * ([Copy.RESTORE_CONFIRM_NOTE]) is what the Restore button needs explaining.
+ *
+ * Rule 7 sits second rather than last for the same reason it is worded the way it is now:
+ * this is the only screen in the app with a control that destroys something, and the note
+ * that describes it should not be the one a reader gives up before reaching.
  */
 fun binDisclosures(): List<String> = listOf(
     Copy.SYSTEM_TRASH_NOTE,
-    Copy.NO_PERMANENT_DELETE_NOTE,
+    Copy.PERMANENT_DELETE_NOTE,
     Copy.RESTORE_CONFIRM_NOTE,
     Copy.TRASH_SIZE_NOTE,
 )

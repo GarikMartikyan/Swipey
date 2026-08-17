@@ -4,10 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.swipey.app.data.HomePreferences
 import com.swipey.app.data.MediaRepository
+import com.swipey.app.data.ResumePoint
 import com.swipey.app.domain.Album
 import com.swipey.app.domain.MediaItem
 import com.swipey.app.domain.mostRecent
-import com.swipey.app.domain.shuffledWithSeed
 import com.swipey.app.domain.toAlbums
 import com.swipey.app.ui.common.queryCatching
 import kotlinx.coroutines.Dispatchers
@@ -25,10 +25,6 @@ import kotlinx.coroutines.withContext
  * @property totalCount every image and video, which is what "All media" means — and now
  *   also exactly what the deck will queue, since the deck no longer withholds anything the
  *   user has already swiped.
- * @property shuffleSeed the seed [shuffleFirst] was resolved with, and the seed the deck
- *   must be handed. These two travel together or the thumbnail is a lie — see [load].
- * @property shuffleFirst the item a shuffle started now would genuinely open on, or `null`
- *   when the gallery is empty.
  * @property albumsAsGrid the persisted list/grid choice. Kept out of [load]'s write path
  *   (every update here is a `copy`) so a reload can never revert a toggle mid-flight.
  */
@@ -38,10 +34,27 @@ data class HomeUiState(
     val totalCount: Int = 0,
     val newest: MediaItem? = null,
     val albums: List<Album> = emptyList(),
-    val shuffleSeed: Long = 0L,
-    val shuffleFirst: MediaItem? = null,
     val albumsAsGrid: Boolean = false,
+    /**
+     * Where the last session stopped, and the photograph it stopped on — resolved against
+     * the gallery that was just read, so a bookmark pointing at something since deleted
+     * comes back null rather than as an offer that leads nowhere.
+     *
+     * Null is the ordinary state on a first run, and the Recent tile draws itself as
+     * unavailable rather than absent: a control that appears only after you have used the
+     * app is one you have to discover twice.
+     */
+    val resume: ResumeOffer? = null,
 )
+
+/**
+ * The Recent tile's contents: where to go, and a picture of it.
+ *
+ * @property item the photograph the last decision was made on. Shown rather than the one
+ *   that would be dealt next, because that is the one the user remembers — the next card is
+ *   by definition one they have never seen.
+ */
+data class ResumeOffer(val point: ResumePoint, val item: MediaItem)
 
 /**
  * Home's data, hoisted off the screen.
@@ -80,26 +93,25 @@ class HomeViewModel(
     }
 
     /**
-     * Reads the gallery and resolves all three thumbnails.
+     * Reads the gallery and resolves what Home draws.
      *
-     * ### Why the shuffle is computed here and not at the tap
-     * The deck deals `queryAll()` and shuffles it with the seed it was given
-     * (`DeckViewModel.load`), so the item a shuffle opens on is element 0 of *that*
-     * shuffle. Home runs the identical call over the identical list and keeps the seed in
-     * state so the tap can hand the *same* one to the deck. Generate a fresh seed at
-     * navigation time instead and the thumbnail is simply a different photograph from the
-     * one the user lands on.
-     *
-     * What this must not become is a clever way to compute element 0 without shuffling —
-     * that is a second implementation of an ordering the deck defines, and the two would
-     * drift. Same list, same call, same seed.
+     * No shuffle happens here any more. It used to, because the Shuffle row showed the
+     * photograph that row would open on and the only way to know which one that was, was to
+     * run the deck's exact shuffle and take element zero — a full pass over a list that can
+     * run to five figures, on every visit to Home, to produce one thumbnail. The row shows
+     * a glyph now, so the shuffle happens once, in the deck, when it is actually needed.
      */
-    fun load(seed: Long = System.currentTimeMillis()) {
+    fun load() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _state.update { it.copy(loading = true, failed = false) }
             // Spec §12: a MediaStore or Room throw becomes a retryable error state, never a
             // crash. Both calls are pure reads, so failing costs nothing but the load.
+            // Read alongside the gallery rather than in `init`, because it changes while
+            // Home is off screen — every swipe of the session the user just came back from
+            // moved it. The first touch of the file blocks on parsing it, hence the hop.
+            val point = withContext(Dispatchers.IO) { preferences.resumePoint }
+
             val loaded = queryCatching {
                 val all = media.queryAll()
                 withContext(Dispatchers.Default) {
@@ -107,13 +119,12 @@ class HomeViewModel(
                         totalCount = all.size,
                         newest = all.mostRecent(),
                         albums = all.toAlbums(),
-                        // Shuffled from the same list the deck will queue, with the same
-                        // seed, so "Starts on this one" is the photograph you actually
-                        // land on. That correspondence is the whole reason this is
-                        // computed here rather than guessed — and it is why this filter
-                        // had to go the moment the deck's did: a Home that hid kept items
-                        // from a deck that shows them would promise the wrong picture.
-                        shuffleFirst = all.shuffledWithSeed(seed).firstOrNull(),
+                        // Resolved against the library as it stands. A bookmark outlives the
+                        // photograph it names — the likeliest way to leave a session is to
+                        // mark that photograph and commit it — and an offer to carry on from
+                        // something that no longer exists is worse than no offer.
+                        resume = point
+                            ?.let { p -> all.firstOrNull { it.id == p.itemId }?.let { ResumeOffer(p, it) } },
                     )
                 }
             }.getOrElse {
@@ -127,14 +138,13 @@ class HomeViewModel(
                     totalCount = loaded.totalCount,
                     newest = loaded.newest,
                     albums = loaded.albums,
-                    shuffleSeed = seed,
-                    shuffleFirst = loaded.shuffleFirst,
+                    resume = loaded.resume,
                 )
             }
         }
     }
 
-    /** Replays the load that failed, with a new seed — nothing was shown to contradict. */
+    /** Replays the load that failed. */
     fun retry() = load()
 
     fun setAlbumsAsGrid(grid: Boolean) {
@@ -147,11 +157,11 @@ class HomeViewModel(
         }
     }
 
-    /** The four fields [load] computes together, so they can only be published together. */
+    /** The fields [load] computes together, so they can only be published together. */
     private class Loaded(
         val totalCount: Int,
         val newest: MediaItem?,
         val albums: List<Album>,
-        val shuffleFirst: MediaItem?,
+        val resume: ResumeOffer?,
     )
 }

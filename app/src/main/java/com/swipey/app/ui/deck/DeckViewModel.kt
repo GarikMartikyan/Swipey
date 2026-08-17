@@ -2,7 +2,10 @@ package com.swipey.app.ui.deck
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.swipey.app.data.HomePreferences
 import com.swipey.app.data.MediaRepository
+import com.swipey.app.data.ResumePoint
+import com.swipey.app.domain.DecidedItem
 import com.swipey.app.domain.MediaItem
 import com.swipey.app.domain.SortMode
 import com.swipey.app.domain.SwipeSession
@@ -15,10 +18,45 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * How far the filmstrip can see in either direction from the card on screen.
+ *
+ * The strip is centred, so it reaches equally forward and back and the screen decides how
+ * much of that it actually draws — five either side on a handset, more on anything wider.
+ * Ten is the ceiling that keeps a foldable filled without asking a session of twenty
+ * thousand for more thumbnails than any screen could show.
+ */
+private const val FilmstripReach = 10
+
 data class DeckUiState(
     val loading: Boolean = true,
     val current: MediaItem? = null,
     val next: MediaItem? = null,
+    /**
+     * The current card and the few behind it, for the filmstrip. Index 0 is what is on
+     * screen now, so the strip reads as "you are here, and this is what follows" rather
+     * than as a separate list that happens to start one item later.
+     */
+    val upcoming: List<MediaItem> = emptyList(),
+    /**
+     * The filmstrip's other half: the few items the deck has already passed, oldest first,
+     * each with what is currently true of it. Derived from the session's marks rather than
+     * from its swipe history, so an item re-decided from the grid reads the same in the
+     * strip as it does in the grid — see [SwipeSession.decided].
+     */
+    val decided: List<DecidedItem> = emptyList(),
+    /** Every item in the session, in queue order. The grid's list. */
+    val items: List<MediaItem> = emptyList(),
+    /** Which of [items] are marked. Held here so the grid and the deck cannot disagree. */
+    val markedIds: Set<Long> = emptySet(),
+    /**
+     * Which of [items] have been explicitly kept.
+     *
+     * The filmstrip's other half reads this. Marked and kept are two sets rather than one
+     * flag because there is a third state — not yet judged — and it is reachable on both
+     * sides of the current card now that the grid can start the deck anywhere.
+     */
+    val keptIds: Set<Long> = emptySet(),
     val position: Int = 0,
     val total: Int = 0,
     val markedCount: Int = 0,
@@ -36,11 +74,19 @@ data class DeckUiState(
 
 class DeckViewModel(
     private val media: MediaRepository,
+    private val preferences: HomePreferences,
 ) : ViewModel() {
 
     private var session: SwipeSession = SwipeSession(emptyList())
     private val _state = MutableStateFlow(DeckUiState())
     val state: StateFlow<DeckUiState> = _state
+
+    /**
+     * Which queue this session is, so a decision can be written down as a place to come
+     * back to. Set by [load] and read by [remember]; null before the first load, which is
+     * the window in which there is nothing to remember anyway.
+     */
+    private var queueIdentity: ResumePoint? = null
 
     /**
      * I4: what [retry] replays. The Deck route builds its arguments from nav args and a
@@ -51,8 +97,23 @@ class DeckViewModel(
      */
     private var lastLoad: (() -> Unit)? = null
 
-    fun load(bucketId: Long?, sort: SortMode, shuffle: Boolean, seed: Long) {
-        lastLoad = { load(bucketId, sort, shuffle, seed) }
+    /**
+     * @param startAfterId opens on the card following this one rather than at the top of the
+     *   queue — Home's "Recent", carrying the user back to where they stopped. Ignored if the
+     *   item is no longer in the library, which is a normal outcome: it may well have been
+     *   the one they marked and then committed.
+     */
+    fun load(bucketId: Long?, sort: SortMode, shuffle: Boolean, seed: Long, startAfterId: Long? = null) {
+        lastLoad = { load(bucketId, sort, shuffle, seed, startAfterId) }
+        queueIdentity = ResumePoint(
+            // Stands in until the first decision replaces it. Nothing reads the id before
+            // then — `remember` overwrites it on every swipe.
+            itemId = 0L,
+            bucketId = bucketId,
+            sort = sort.name,
+            shuffle = shuffle,
+            seed = seed,
+        )
         // Fix round 2, Critical 1: this must run synchronously, before the coroutine
         // below ever suspends. DeckViewModel is shared (Activity-scoped) across every
         // Deck entry, and without this reset the *previous* album's session — its
@@ -89,6 +150,9 @@ class DeckViewModel(
                 return@launch
             }
             session = SwipeSession(ordered)
+            // After the queue exists, because "the card after that one" is a fact about
+            // this ordering and not about the library.
+            if (startAfterId != null) session.startAfter(startAfterId)
             publish()
         }
     }
@@ -116,6 +180,40 @@ class DeckViewModel(
     fun swipe(itemId: Long, keep: Boolean) {
         if (session.current?.id != itemId) return
         if (keep) session.swipeRight() else session.swipeLeft()
+        remember(itemId)
+        publish()
+    }
+
+    /**
+     * Writes down the photograph just decided on, as somewhere to come back to.
+     *
+     * Keyed to the *decision* rather than to the card on screen, which is the distinction
+     * the user drew: scrolling the grid past a hundred pictures is looking, and a bookmark
+     * that followed the eye would offer to resume somewhere they had never judged. Only
+     * [swipe] and the grid's tick call this.
+     *
+     * Off the main thread because the very first touch of the preferences file is a
+     * blocking disk read, and the deck is one of the two screens that can be reached before
+     * Home has warmed it. Fire-and-forget: a bookmark that loses its last entry to a kill
+     * costs a card of accuracy in an offer the user can decline.
+     */
+    private fun remember(itemId: Long) {
+        val identity = queueIdentity ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            preferences.resumePoint = identity.copy(itemId = itemId)
+        }
+    }
+
+    /**
+     * Deals from [itemId], wherever it sits in the queue. The grid's tap on a photograph.
+     *
+     * Nothing is decided and nothing is remembered: jumping is navigation, and the bookmark
+     * follows decisions. A jump forward leaves everything it passes undecided — see
+     * [SwipeSession.jumpTo], and the filmstrip, which draws those as untouched rather than
+     * as kept.
+     */
+    fun jumpTo(itemId: Long) {
+        if (!session.jumpTo(itemId)) return
         publish()
     }
 
@@ -126,8 +224,39 @@ class DeckViewModel(
 
     fun marked(): List<MediaItem> = session.marked()
 
+    /**
+     * The grid's edit: marks or unmarks any item without moving the deck.
+     *
+     * Republishes, so the deck's counter and chip agree with the grid the moment the tap
+     * lands — they are two views of one set, and the only way they can disagree is if one
+     * of them keeps its own copy.
+     */
+    fun setMarked(itemId: Long, marked: Boolean) {
+        session.setMarked(itemId, marked)
+        // A tick in the grid is a decision, so it moves the bookmark exactly as a swipe
+        // does. Anything else would make "carry on" mean something different depending on
+        // which of the two ways the user had judged the photograph.
+        remember(itemId)
+        publish()
+    }
+
     fun unmark(id: Long) {
         session.unmark(id)
+        publish()
+    }
+
+    /**
+     * The items are in the phone's trash now, so they leave the session too.
+     *
+     * Called once a commit has been confirmed. The commit itself now ends the trip — the
+     * user is sent to Home rather than back onto the card they broke off from — so nothing
+     * renders this session again before the next [load] replaces it outright. It is kept
+     * because a ViewModel that goes on listing photographs MediaStore will no longer serve
+     * is a lie waiting for a second reader; see [SwipeSession.drop].
+     */
+    fun dropCommitted(ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        session.drop(ids)
         publish()
     }
 
@@ -139,6 +268,11 @@ class DeckViewModel(
             // mid-gesture. Null on the last card, which is correct — there is nothing
             // behind it.
             next = session.peek(1),
+            upcoming = (0..FilmstripReach).mapNotNull { session.peek(it) },
+            decided = session.decided(FilmstripReach),
+            items = session.items,
+            markedIds = session.markedIds,
+            keptIds = session.keptIds,
             position = session.position,
             total = session.total,
             markedCount = session.markedCount,

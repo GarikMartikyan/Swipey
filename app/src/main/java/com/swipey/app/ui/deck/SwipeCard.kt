@@ -4,9 +4,12 @@ import android.content.res.Configuration
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -38,6 +41,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.swipey.app.ui.design.SwipeyDarkColors
@@ -78,6 +82,28 @@ private const val ExitMillis = 180
  */
 private const val LiftScale = 0.02f
 
+/**
+ * How far the card leans, in degrees, once the drag reaches the commit point.
+ *
+ * Driven by the same clamped `progress()` as everything else that answers the drag, so the
+ * tilt, the badge and the under-card all arrive at full strength on the same frame — the
+ * one where releasing would commit. Past that the angle holds rather than winding up, and
+ * the card carries it off-screen through the fly-off.
+ *
+ * Eight degrees is small on purpose. The card is a photograph, and a photograph held at an
+ * angle reads as a mistake until the angle is big enough to be obviously deliberate; the
+ * range in between is the uncanny one. Eight is under it — enough to see in peripheral
+ * vision while the eye is still on the picture, not enough to look like the crop slipped.
+ *
+ * It costs no clipping, and that is arithmetic rather than luck: the angle only exists in
+ * proportion to travel, so by the time the card is tilted its corners sweep toward a gutter
+ * the card itself has already vacated. At full tilt the leading corners reach about
+ * `height/2 * sin(8°)` — roughly 7% of the stage's width — past the untilted edge, against
+ * a card that has by then moved [CommitFraction] of the screen the other way. Nothing is
+ * cut off either way: a `graphicsLayer` does not clip to its parent unless asked.
+ */
+private const val TiltDegrees = 8f
+
 /** The decision glyph's badge. Large enough to read past a thumb, small enough to see around. */
 private val GlyphBadgeSize = 96.dp
 
@@ -109,14 +135,37 @@ private const val GlyphMinScale = 0.7f
 private const val UnderScale = 0.93f
 
 /**
- * The gutter between the card and the edge of the safe area.
+ * The card's width, as a fraction of the space it is given.
  *
- * Small, because the photograph is the point and every dp given to the gutter is taken
- * from the thing being judged. It exists for two reasons: so the rounded corners have
- * canvas to be rounded *against*, and so [LiftScale] has somewhere to grow into. The
- * second is a hard constraint — see that constant.
+ * The remainder is the gutter, and it is doing three jobs: giving the rounded corners
+ * canvas to be rounded *against*, giving [LiftScale] somewhere to grow into, and letting
+ * the card behind show as a card behind rather than as a sliver.
  */
-private val CardInset = SwipeySpacing.md
+private const val CardWidthFraction = 0.90f
+
+/** How much of the available height the card may take before it stops growing. */
+private const val CardHeightFraction = 0.98f
+
+/**
+ * The card's shape: width over height. 7:10 upright.
+ *
+ * Fixed rather than following each photograph, which is the decision that makes the crop
+ * meaningful — every card is the same rectangle, so the strip and the controls never move
+ * and the stack never jumps. What it costs is the edges of anything wider, which is what
+ * the preview control exists to give back.
+ *
+ * Taller than the 3:4 it started as, because on a modern phone the deck was leaving height
+ * on the floor. The card is width-limited on anything tall — [CardWidthFraction] binds long
+ * before [CardHeightFraction] does — so the stage had something like 100dp of canvas above
+ * and below the card that nothing was using. Going from 0.75 to 0.70 spends about a third
+ * of that on the photograph: on a 385dp-wide screen the card grows from roughly 462dp tall
+ * to 495dp with its width untouched, and the min() below still catches short screens by
+ * falling back to a height-limited card.
+ *
+ * It is not free, and the cost is the crop: a taller rectangle keeps more of an upright
+ * photograph and cuts more from the sides of a landscape one.
+ */
+private const val CardAspect = 0.70f
 
 /**
  * The top card, and the gesture that decides it.
@@ -129,10 +178,15 @@ private val CardInset = SwipeySpacing.md
  * caller can disable any other way of recording a decision (e.g. buttons) until it
  * resolves.
  *
- * ### What the user sees: lift, and a glyph
- * The card never changes angle. Nothing rotates on drag and nothing rotates on exit — the
- * photograph stays square with the screen from the moment a thumb lands to the moment it
- * leaves. Two things carry the gesture instead:
+ * ### What the user sees: tilt, lift, and a glyph
+ * Three things carry the gesture:
+ *
+ * **Tilt.** The card leans the way it is going, reaching [TiltDegrees] at the commit point
+ * and holding that angle out through the fly-off. It rotates about its own centre, which
+ * keeps [LiftScale]'s geometry — and the gutter budget reasoned about there — unchanged.
+ * This is the cue that costs nothing to look at: it *is* the photograph moving, so it
+ * arrives in peripheral vision while the eye is still on the picture, and it makes the
+ * card behave like an object being pushed rather than an image being panned.
  *
  * **Lift.** On touch the card swells by [LiftScale] and settles back on release. It is
  * keyed to contact rather than to displacement, so it answers "the app felt that" before
@@ -147,8 +201,8 @@ private val CardInset = SwipeySpacing.md
  * the right edge warmed toward keep. That treatment argued its own case well and it is
  * worth naming what was traded for this one: the picture no longer visibly drains, so the
  * feedback is now a symbol *about* the decision rather than a preview *of* it. What it
- * buys is legibility over any photograph, and a single unambiguous statement of direction
- * on a card that no longer tilts to tell you.
+ * buys is legibility over any photograph, and a single unambiguous statement of *what*
+ * happens on release to sit alongside the tilt's statement of *which way*.
  *
  * The badge is a sibling of the moving card, not a child of it: it stays put while the
  * photograph travels, which is what makes it read as belonging to the screen rather than
@@ -168,9 +222,16 @@ fun SwipeCard(
     onSwiped: (itemId: Long, keep: Boolean) -> Unit,
     onCommittingChanged: (Boolean) -> Unit = {},
     commitRequest: Boolean? = null,
+    onTap: (() -> Unit)? = null,
+    onTapLabel: String? = null,
     under: (@Composable () -> Unit)? = null,
-    content: @Composable () -> Unit,
+    content: @Composable (dragProgress: () -> Float) -> Unit,
 ) {
+    // Measured against the screen rather than the card on purpose. The card is now
+    // narrower than the screen, but the gesture is not: a drag that carries the card 30% of
+    // *its own* width would commit after a very short travel, and the thumb has the whole
+    // screen to move across. The distance that should mean "committed" is a property of the
+    // hand, not of how big the artwork happens to be.
     val screenWidthPx = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
     }
@@ -357,39 +418,84 @@ fun SwipeCard(
                 )
             },
     ) {
-        // The next photograph, beneath everything and never moving sideways: only the top
-        // card travels. It grows toward full size as the drag approaches the commit point,
-        // so by the moment it is uncovered it has already arrived. Null on the last card.
-        if (under != null) {
+        // The card is measured once, here, and both layers are handed the same numbers —
+        // which is what makes "the same rectangle at two depths" true by construction
+        // rather than by two modifier chains agreeing. Width first, height derived; if that
+        // overflows a short stage (landscape, a small screen, a large font scale pushing
+        // the chrome down) the height leads instead and the width follows it back down.
+        BoxWithConstraints(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val byWidth = maxWidth * CardWidthFraction
+            val cardWidth = minOf(byWidth, maxHeight * CardHeightFraction * CardAspect)
+            val cardHeight = cardWidth / CardAspect
+
+            // The next photograph, beneath everything and never moving sideways: only the
+            // top card travels. It grows toward full size as the drag approaches the commit
+            // point, so by the moment it is uncovered it has already arrived. Null on the
+            // last card.
+            if (under != null) {
+                Box(
+                    Modifier
+                        .size(cardWidth, cardHeight)
+                        .graphicsLayer {
+                            val t = abs(progress())
+                            val s = UnderScale + (1f - UnderScale) * t
+                            scaleX = s
+                            scaleY = s
+                        }
+                        .cardSurface(),
+                ) {
+                    under()
+                }
+            }
+
+            // The photograph itself, and the only thing that moves. The tilt lives here and
+            // only here: the card underneath stays square with the screen, so the stack
+            // reads as one card being taken off a level deck rather than as a deck that
+            // leans along with it.
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .size(cardWidth, cardHeight)
                     .graphicsLayer {
-                        val t = abs(progress())
-                        val s = UnderScale + (1f - UnderScale) * t
+                        translationX = offsetX.value
+                        // Clamped by progress(), so the angle is reached at the commit
+                        // point and then held rather than accumulating across the fly-off,
+                        // which travels 1.5 screens and would otherwise spin the card.
+                        rotationZ = TiltDegrees * progress()
+                        val s = 1f + LiftScale * lift.value
                         scaleX = s
                         scaleY = s
                     }
-                    .cardSurface(),
+                    .cardSurface()
+                    // `clickable` rather than a tap gesture, so the tap arrives with a role
+                    // and a label and a screen reader can reach it. It does not consume
+                    // movement, so the drag detector on the parent still sees every gesture
+                    // that turns into a swipe; a press that becomes a drag is cancelled here
+                    // rather than fired.
+                    .then(
+                        if (onTap != null) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClickLabel = onTapLabel,
+                                role = Role.Button,
+                                onClick = onTap,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
-                under()
+                // The drag is handed to the content rather than kept private, because one
+                // thing inside the card answers it: a video's ambient light, which lags
+                // behind the card so it reads as belonging to the screen rather than to the
+                // picture. See VideoAmbientLayer. Passed as a function, not a value, so the
+                // read happens in the receiver's draw phase and a frame of dragging still
+                // recomposes nothing.
+                content(::progress)
             }
-        }
-
-        // The photograph itself, and the only thing that moves. No rotationZ: the card is
-        // square with the screen at every point in the gesture.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    translationX = offsetX.value
-                    val s = 1f + LiftScale * lift.value
-                    scaleX = s
-                    scaleY = s
-                }
-                .cardSurface(),
-        ) {
-            content()
         }
 
         // The decision glyph, stationary at the centre while the photograph travels under
@@ -411,21 +517,17 @@ fun SwipeCard(
  * place, because the two must be the same object at different depths — a stack whose cards
  * had different corners would read as two unrelated things overlapping.
  *
- * The order matters. Insets and padding come first so the rounding is cut from the card's
- * own bounds rather than the screen's; the clip follows; the ground goes last so it fills
- * the rounded shape rather than a rectangle behind it. `safeDrawing` keeps the corners
- * clear of the display cutout and the phone's own rounded corners, where a card rounded to
- * 28dp against a screen rounded to something else reads as a mistake.
+ * The order matters: the clip comes before the ground, so the ground fills the rounded
+ * shape rather than a rectangle behind it. Size is not set here — the caller measures the
+ * card once and hands both layers the same dimensions, which is what guarantees they are
+ * the same rectangle.
  *
  * The ground is the dark palette's surface in both themes, for the same reason the chrome
  * is: what sits on this is a photograph, and `ContentScale.Fit` means the card shows
  * through wherever the picture's aspect doesn't match the screen's. A light ground there
  * would flare around a dark photograph.
  */
-@Composable
 private fun Modifier.cardSurface(): Modifier = this
-    .windowInsetsPadding(WindowInsets.safeDrawing)
-    .padding(CardInset)
     .clip(RoundedCornerShape(SwipeyRadius.deck))
     .background(SwipeyDarkColors.surface)
 
@@ -443,22 +545,28 @@ private fun Modifier.cardSurface(): Modifier = this
 @Composable
 private fun DecisionGlyph(progress: () -> Float, modifier: Modifier = Modifier) {
     Box(modifier.clearAndSetSemantics { }) {
+        // The signal pair, and the one place in the app where a red is allowed. This is the
+        // moment the decision is being made — thumb down, card moving, eye on the
+        // photograph — so the badge has to answer "which way is this going" before the
+        // glyph inside it can be resolved. Everywhere the app merely *reports* a decision
+        // later it goes back to the quiet palette; see SwipeyColors.binSignal.
+        //
+        // The glyphs stay regardless. A tick and a bin say the whole thing on their own,
+        // which is what keeps this working in sunlight, at arm's length, and for a user who
+        // cannot separate the two hues.
+        //
+        // Dark-palette values in both themes: the ground under these is a photograph, not
+        // the canvas, and the light palette's darker pair — tuned to be read on white —
+        // sinks into a picture rather than sitting on top of it.
         Badge(
             icon = SwipeyIcons.Bin,
-            // No bin colour: the palette refuses itself one, and inventing an alarm red
-            // here would undo that. A neutral ground under a light glyph is the badge
-            // saying what is about to happen without editorialising about it.
-            ground = Color.Black,
+            ground = SwipeyDarkColors.binSignal,
             tint = SwipeyDarkColors.textPrimary,
             amount = { (-progress()).coerceIn(0f, 1f) },
         )
         Badge(
             icon = SwipeyIcons.Check,
-            // The dark palette's keep in both themes: the ground under this is a
-            // photograph, not the canvas, and the light palette's darker #1D51D6 — tuned
-            // to be read as a glyph on white — sinks into a picture rather than sitting on
-            // top of it.
-            ground = SwipeyDarkColors.keep,
+            ground = SwipeyDarkColors.keepSignal,
             tint = SwipeyDarkColors.textPrimary,
             amount = { progress().coerceIn(0f, 1f) },
         )

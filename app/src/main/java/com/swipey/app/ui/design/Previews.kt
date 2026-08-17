@@ -143,6 +143,18 @@ private fun CardAndChipPreview() = PreviewCanvas {
         SwipeyChip("Kept", tone = SwipeyTone.Keep, icon = SwipeyIcons.Check)
         SwipeyChip("Binned", tone = SwipeyTone.Bin, icon = SwipeyIcons.Bin)
     }
+    // The deck's marked chip, which is the reason the trailing icon exists. Next to the
+    // plain one above it is the whole argument in two objects: same size, same hairline,
+    // and only one of them looks like it goes anywhere.
+    Row(horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        SwipeyChip(
+            "12 marked · 1.2 GB",
+            tone = SwipeyTone.Bin,
+            onClick = {},
+            icon = SwipeyIcons.Bin,
+            trailingIcon = SwipeyIcons.ChevronRight,
+        )
+    }
 }
 
 @SwipeyPreviews

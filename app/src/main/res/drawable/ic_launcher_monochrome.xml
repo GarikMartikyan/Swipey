@@ -1,31 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The monochrome layer, for Android 13+ themed icons.
+  The themed-icon layer: the same three shapes as ic_launcher_foreground.xml with the
+  colours taken out.
 
-  When the user turns on themed icons the launcher throws away the foreground's colours and
-  tints this layer with one colour drawn from their wallpaper. Marks that carry their
-  meaning in a colour contrast disappear here; this one doesn't, because the two halves are
-  separated by a 6dp gap rather than by hue. That gap is the whole reason the Split works
-  flattened — do not close it.
+  Android tints this itself from the user's wallpaper, so the fill here is only a placeholder
+  — what matters is that the silhouette survives being flattened to one colour. The Flick
+  does, because its three shapes never touch: the trails stop well short of the card, so a
+  single-colour version still reads as a card with something behind it rather than as one
+  blob.
 
-  Authored in black on transparent, which is the contract: the system supplies the tint and
-  the ground, and any colour committed here is overwritten.
-
-  Geometry identical to ic_launcher_foreground.xml, minus the split into two fills. See that
-  file for why the card is 46x52 and why it stays inside the 33dp guaranteed circle.
+  The geometry is duplicated from the foreground rather than shared, because there is no way
+  to reference one vector's paths from another. MarkGeometryTest asserts the two files draw
+  exactly the same shape, so the copies cannot drift apart unnoticed.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
     <path
         android:fillColor="#000000"
-        android:pathData="M43,28 H53.5 L48.5,80 H43 A12,12 0 0 1 31,68 V40 A12,12 0 0 1 43,28 Z" />
-
+        android:pathData="M31.371,46.35 H40.721 A2.55,2.55 0 0 1 40.721,51.45 H31.371 A2.55,2.55 0 0 1 31.371,46.35 Z" />
     <path
         android:fillColor="#000000"
-        android:pathData="M59.5,28 H65 A12,12 0 0 1 77,40 V68 A12,12 0 0 1 65,80 H54.5 Z" />
-
+        android:pathData="M36.471,58.25 H40.721 A2.55,2.55 0 0 1 40.721,63.35 H36.471 A2.55,2.55 0 0 1 36.471,58.25 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M62.643,35.683 L74.238,38.36 A6.375,6.375 0 0 1 79.016,46.006 L74.044,67.539 A6.375,6.375 0 0 1 66.399,72.317 L54.804,69.64 A6.375,6.375 0 0 1 50.026,61.994 L54.997,40.461 A6.375,6.375 0 0 1 62.643,35.683 Z" />
 </vector>

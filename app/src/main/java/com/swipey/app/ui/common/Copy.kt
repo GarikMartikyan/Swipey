@@ -41,15 +41,40 @@ object Copy {
     const val HOME_SHUFFLE = "Shuffle"
 
     /**
-     * Said beside the thumbnail of the item the shuffle genuinely opens on — Home resolves
-     * the seed and the already-kept filter exactly as the deck will, and hands the same
-     * seed over. It is a factual claim, not flavour text: do not reuse it anywhere the
-     * thumbnail beside it isn't that item.
+     * Beside the shuffle glyph.
+     *
+     * This used to read "Starts on this one" next to a thumbnail of the photograph the
+     * shuffle would genuinely open on. The thumbnail is a glyph now, so there is no "this
+     * one" to point at and the line has to describe the scope instead — which is what the
+     * other two rows on this screen do anyway.
      */
-    const val HOME_SHUFFLE_SUB = "Starts on this one"
+    const val HOME_SHUFFLE_SUB = "Everything, in a random order"
 
-    /** The shuffle row when every item has already been kept — there is no first item. */
-    const val HOME_SHUFFLE_EMPTY = "Nothing left to shuffle"
+    /**
+     * The tile beside Shuffle: back to the queue you were last swiping, on the card after
+     * the last one you decided.
+     *
+     * "Recent" rather than "Resume" or "Continue". Both of those describe a session being
+     * restored, and nothing is — the marks are gone, the queue is dealt again from the
+     * library as it stands now. What survives is a place, and "Recent" claims only that.
+     */
+    const val HOME_RECENT = "Recent"
+
+    /**
+     * The subtitle when a shuffle is what the user was last swiping.
+     *
+     * A shuffled queue has no album to name, and it is worth naming as a shuffle rather than
+     * showing nothing: reopening it deals the same order, which is not what most people
+     * expect the word to mean.
+     */
+    const val HOME_RECENT_SHUFFLE = "Shuffle, where you left it"
+
+    /** Recent, before there is anything to be recent. The tile is drawn but not offered. */
+    const val HOME_RECENT_NONE = "Nothing swiped yet"
+
+    /** What the Recent tile does, for a screen reader — the tile itself only says "Recent". */
+    const val HOME_RECENT_ACTION = "Carry on from where you stopped"
+
 
     /** The list/grid toggle. Names what the next tap does, since the glyph shows only where it goes. */
     const val HOME_SHOW_GRID = "Show albums as a grid"
@@ -61,6 +86,32 @@ object Copy {
 
     const val HOME_BIN = "Bin"
     fun homeBinSubtitle(count: Int) = "${grouped(count)} items"
+
+    // --- the menu ---------------------------------------------------------------
+
+    /**
+     * The burger's accessible name.
+     *
+     * "Menu" rather than "Open the menu": a screen reader already announces it as a button,
+     * and the app's other icon controls name the thing, not the gesture — see
+     * [HOME_SORT_ACTION], which is the exception that names an outcome because "Sort" alone
+     * would not say what changes.
+     */
+    const val HOME_MENU = "Menu"
+
+    /** The drawer's heading. Names the app rather than the panel, which needs no name. */
+    const val MENU_TITLE = APP_NAME
+
+    /**
+     * Settings, which does not go anywhere yet.
+     *
+     * Listed and visibly unavailable rather than hidden until it works. A menu of one item
+     * says the menu is finished; a menu with a greyed second item says the app has a
+     * settings screen coming, which is the truth. The note underneath is what keeps that
+     * from reading as a fault — a disabled row with no explanation is a bug report.
+     */
+    const val MENU_SETTINGS = "Settings"
+    const val MENU_SETTINGS_SOON = "Not built yet"
 
     /**
      * Digit grouping for the counts Home shows, which run to five figures on a full phone.
@@ -166,16 +217,28 @@ object Copy {
     // -----------------------------------------------------------------------
 
     /**
-     * The sound toggle's label. It states the *current* state rather than the action,
-     * because it sits on screen while a video plays and has to be readable at a glance;
-     * the control's role is announced alongside it.
+     * The sound toggle, which is a glyph now rather than a chip that spelled out its own
+     * state. So these name the **action** — what the tap does — the way every other icon
+     * button in the app does; a speaker with a cross through it already states the state,
+     * and a control that announces "Muted" while offering to unmute reads backwards to a
+     * screen reader.
      */
-    const val VIDEO_MUTED = "Muted"
-    const val VIDEO_SOUND_ON = "Sound on"
+    const val VIDEO_MUTE = "Mute"
+    const val VIDEO_UNMUTE = "Unmute"
 
     /** The tap action on a video: the whole surface is the play/pause control. */
     const val VIDEO_PLAY = "Play"
     const val VIDEO_PAUSE = "Pause"
+
+    /**
+     * The scrubber's accessible name. Its *value* is announced separately via
+     * [videoElapsed], so the two are not baked into one string that a screen reader would
+     * have to re-read in full on every frame of a drag.
+     */
+    const val VIDEO_TIMELINE = "Video timeline"
+
+    /** What the scrubber currently reads, for a screen reader: "0:12 of 1:30". */
+    fun videoElapsed(position: String, duration: String) = "$position of $duration"
 
     const val REVIEW_TITLE = "Review"
     const val REVIEW_EMPTY = "Nothing marked yet"
@@ -194,18 +257,25 @@ object Copy {
     const val SYSTEM_TRASH_NOTE =
         "This is your phone's trash, shared with Google Photos and Files. " +
             "If you empty it there, these items are gone from Swipey's bin too."
-    /** Rule 7. */
-    const val NO_PERMANENT_DELETE_NOTE = "Swipey can't delete anything permanently."
+    /**
+     * Rule 7, as amended.
+     *
+     * It used to read "Swipey can't delete anything permanently", which was true for as
+     * long as the Bin only knew how to put things back. The Bin now has a Delete, so the
+     * sentence had to change with it — a note that reassures the user about a capability
+     * the app has since gained is worse than no note at all. What is still true, and what
+     * this says instead, is that the app cannot do it quietly or by itself: Android asks,
+     * and nothing undoes it afterwards.
+     */
+    const val PERMANENT_DELETE_NOTE =
+        "Deleting from the Bin is permanent. Android will ask you to confirm, and nothing can undo it afterwards."
     /** Rule 5. */
     const val RESTORE_CONFIRM_NOTE = "Android will ask you to confirm the restore."
 
     fun multipleConfirmations(count: Int) =
         "Android will ask you to confirm $count times, once per batch."
 
-    fun resultTitle(count: Int) = "$count items moved to trash"
     fun expiresAtLeast(date: String) = "Recoverable until at least $date"
-    /** F6: [total] must be every id the commit attempted — confirmed + declined + vanished. */
-    fun cancelled(done: Int, total: Int) = "Stopped after $done of $total items"
 
     /**
      * Fix round 2, Critical 2: shown when the commit path itself throws (e.g. before
@@ -228,15 +298,19 @@ object Copy {
      */
     const val COMMIT_CANCELLED = "Nothing was moved to trash — your marked items are still here."
 
-    // F8(c): distinct from BIN_TITLE — on ResultScreen, right after items were just binned,
-    // a bare "Bin" label reads ambiguously as the verb (throw away) rather than the
-    // navigate-to-Bin destination it actually is.
-    const val RESULT_VIEW_BIN = "View Bin"
-    // F8(b): was hardcoded at the ResultScreen call site, breaking this file's own
-    // invariant that all user-facing copy lives here.
-    const val RESULT_DONE = "Done"
+    /**
+     * The deck's own way out, on both terminal states. Was RESULT_DONE, named after the
+     * screen that used to follow a commit; that screen is gone and this is the only caller
+     * left, so the name says what it is rather than where it used to live.
+     */
+    const val DONE = "Done"
 
     const val BIN_TITLE = "Bin"
+    const val BIN_SELECT_ALL = "Select all"
+    const val BIN_CLEAR = "Clear"
+    const val BIN_DELETE = "Delete"
+    /** Pairs with [binRestoreAction]: both count only once there is something to count. */
+    fun binDeleteAction(count: Int) = "Delete $count"
     const val BIN_EMPTY = "Nothing here"
     const val BIN_RESTORE = "Restore"
     /** F8(b): was composed at the BinScreen call site ("${BIN_RESTORE} ${count}"). */
@@ -246,15 +320,25 @@ object Copy {
 
     /**
      * Rule 6: honest per-item outcome for a restore attempt, shown on the Bin itself.
-     * Restore never routes through Result — a cancelled restore still reports its ids
-     * in RecoveryReport.confirmedTrashed (that field means "currently trashed", not
-     * "just trashed by this action"), so surfacing it via resultTitle()/expiresAtLeast()
-     * would falsely tell the user their restore attempt moved items to trash.
+     * A cancelled restore still reports its ids in RecoveryReport.confirmedTrashed — that
+     * field means "currently trashed", not "just trashed by this action" — so a count read
+     * straight off the report would tell the user their restore had moved items *to* the
+     * trash. This sentence is derived from the resolutions instead.
      */
     fun restoreOutcome(restored: Int, attempted: Int) = "Restored $restored of $attempted items"
 
     /** Fix round 2, Critical 2: the restore-side equivalent of [COMMIT_FAILED]. */
     const val RESTORE_FAILED = "Couldn't restore those items. Nothing was changed — try again."
+
+    /**
+     * The delete-side equivalent of [restoreOutcome], and read the same way: [deleted] is
+     * counted from what the reconciliation pass could no longer find, never from the
+     * dialog's result code. A part-approved batch therefore reports the part that went.
+     */
+    fun deleteOutcome(deleted: Int, attempted: Int) = "Deleted $deleted of $attempted items"
+
+    /** The delete-side equivalent of [RESTORE_FAILED]. */
+    const val DELETE_FAILED = "Couldn't delete those items. Nothing was changed — try again."
 
     // -----------------------------------------------------------------------
     // Progressive disclosure
@@ -268,7 +352,7 @@ object Copy {
     // which is the single place that decides which notes a screen carries.
 
     /**
-     * Review's and Result's on-screen line.
+     * Review's on-screen line.
      *
      * Rule 1 ("moved to trash", never "deleted") and rule 3: "about a month" is
      * hedged on purpose — the headline must not promise a hard deadline, and the
@@ -279,22 +363,17 @@ object Copy {
     const val TRASH_SHORT_NOTE = "Moved to trash · recoverable for about a month"
 
     /**
-     * The Bin's on-screen line. Rules 1 and 7 in one breath; rules 4 and 5 —
-     * whose trash it is, and that Android asks again — sit behind the ⓘ.
+     * The Bin's on-screen line. Rules 1 and 7 in one breath — and it no longer promises
+     * that nothing here gets deleted, because this screen now has a button that does
+     * exactly that. Rules 4 and 5 — whose trash it is, and that Android asks again — sit
+     * behind the ⓘ, alongside [PERMANENT_DELETE_NOTE].
      */
-    const val BIN_SHORT_NOTE = "In your phone's trash · nothing here is deleted"
+    const val BIN_SHORT_NOTE = "In your phone's trash · recoverable until you delete it"
 
     /** Label and accessible name for the ⓘ that opens the full disclosure. */
     const val DISCLOSURE_ACTION = "What this means"
     const val DISCLOSURE_TITLE = "What happens to your photos"
     const val DISCLOSURE_DISMISS = "Got it"
-
-    /**
-     * Result's outcome line. Pairs with the large numeral above it; the audited
-     * sentence [resultTitle] is what a screen reader is given for the pair, so
-     * the count is never announced twice. See `ResultScreen`.
-     */
-    const val RESULT_OUTCOME_LINE = "items moved to trash"
 
     /** Marks the active choice in the sort chooser. */
     const val SELECTED = "Selected"
@@ -305,4 +384,156 @@ object Copy {
     /** The tap action on a Bin thumbnail, either way round. */
     const val BIN_SELECT = "Select"
     const val BIN_DESELECT = "Deselect"
+
+    // --- deck: the crop, and seeing past it ------------------------------------
+
+    /**
+     * The preview control on the deck.
+     *
+     * The card crops to a fixed shape, which means a wide photograph is shown with its
+     * edges held back — and the user is deciding whether to bin it. This names the way to
+     * see the rest, so the crop is a presentation choice rather than something withheld.
+     */
+    const val DECK_PREVIEW = "See the whole photo"
+
+    /** Dismisses the preview. Says what the tap does, not where it goes. */
+    const val DECK_PREVIEW_CLOSE = "Close the preview"
+
+    // --- what this photograph is ---------------------------------------------
+
+    /**
+     * The badge over the card, and the sheet behind it.
+     *
+     * The badge answers the two questions that actually change a keep-or-bin decision —
+     * how much room it is costing and roughly when it is from — and nothing else. Everything
+     * that is merely interesting is one tap away rather than on the photograph.
+     */
+    fun deckBadge(size: String, date: String) = "$size · $date"
+
+    /** The badge's control. Names what opens, not the gesture that opens it. */
+    const val DECK_INFO_ACTION = "Details"
+
+    const val INFO_TITLE = "Details"
+    const val INFO_NAME = "File"
+    const val INFO_ALBUM = "Album"
+    const val INFO_ADDED = "Added"
+    const val INFO_SIZE = "Size"
+    const val INFO_KIND = "Kind"
+    const val INFO_DURATION = "Length"
+    const val INFO_RESOLUTION = "Resolution"
+    const val INFO_PATH = "Folder"
+
+    const val INFO_KIND_PHOTO = "Photo"
+    const val INFO_KIND_VIDEO = "Video"
+
+    /**
+     * Stated only when both dimensions are known — see `MediaItem.megapixels`.
+     *
+     * One decimal place, because the second is noise on a number nobody compares that
+     * closely, and a bare "12 MP" would round a 12.9 down to the same string as an 11.5.
+     */
+    fun infoResolution(width: Int, height: Int, megapixels: Double?): String {
+        val dimensions = "$width × $height"
+        return if (megapixels == null) dimensions else "$dimensions · %.1f MP".format(megapixels)
+    }
+
+    /** Half a resolution is still worth stating; the sheet says which half it has. */
+    fun infoWidthOnly(width: Int) = "$width px wide"
+    fun infoHeightOnly(height: Int) = "$height px tall"
+
+    /** The megapixel figure on its own, for the header's table. */
+    fun infoMegapixels(megapixels: Double) = "%.1f MP".format(megapixels)
+
+    /**
+     * What a row says when MediaStore had nothing.
+     *
+     * An em dash rather than "Unknown" or an omitted row: the label is still true — this
+     * item does have a resolution — and a blank in a spec sheet reads as "not recorded",
+     * which is exactly the situation. Dropping the row instead would make two photographs
+     * produce sheets of different heights for no reason the user can see.
+     */
+    const val INFO_UNKNOWN = "—"
+
+    /**
+     * How long ago, in words.
+     *
+     * Sits beside the thumbnail at the top of the sheet, where the question is "roughly when"
+     * and an exact timestamp is more precision than the eye wants. The precise date is still
+     * three rows below, so nothing is lost by rounding here — see [com.swipey.app.domain.relativeAge]
+     * for why none of these phrases can come out with a "1" in them.
+     */
+    fun infoAge(age: com.swipey.app.domain.RelativeAge): String = when (age.bucket) {
+        com.swipey.app.domain.AgeBucket.TODAY -> "Today"
+        com.swipey.app.domain.AgeBucket.YESTERDAY -> "Yesterday"
+        com.swipey.app.domain.AgeBucket.DAYS -> "${age.count} days ago"
+        com.swipey.app.domain.AgeBucket.LAST_WEEK -> "Last week"
+        com.swipey.app.domain.AgeBucket.WEEKS -> "${age.count} weeks ago"
+        com.swipey.app.domain.AgeBucket.MONTHS -> "${age.count} months ago"
+        com.swipey.app.domain.AgeBucket.LAST_YEAR -> "Last year"
+        com.swipey.app.domain.AgeBucket.YEARS -> "${age.count} years ago"
+    }
+
+
+    // The filmstrip's tail count lived here. It went when the strip was centred: the strip
+    // now runs the session through the middle of the screen rather than starting at the
+    // gutter, and the room the count occupied is what pays for the decided half. Nothing
+    // was lost with it — the progress rule and DECK counter above the card already say how
+    // far through the session the user is, without asking them to add anything up.
+
+
+    // --- the session grid ------------------------------------------------------
+
+    /**
+     * The grid's title.
+     *
+     * "In this session" rather than "All photos": the grid lists the queue the deck is
+     * serving, which for an album or a shuffle is not the whole gallery. Calling it "all"
+     * would be wrong in exactly the cases where a user most needs to know what they are
+     * looking at.
+     */
+    const val GRID_TITLE = "Everything in this session"
+
+    /** Closes the grid. "Done" rather than "Close" — nothing here needs saving. */
+    const val GRID_DONE = "Done"
+
+    /**
+     * What tapping a photograph in the grid does — the screen reader's half of the split
+     * between the tick box and the picture.
+     *
+     * "Start here" rather than "Open": it does not show the photograph, it makes it the card
+     * being judged and carries the session on from there. A user who heard "Open" and
+     * expected a viewer would find they had moved their place in the queue instead.
+     */
+    const val GRID_OPEN = "Start here"
+
+    /**
+     * The card the deck is on, announced as the cell's state.
+     *
+     * The grid draws a ring around it, and a ring is the one cue that cannot be read out.
+     * Stated as a state rather than folded into the label so it is announced *and* the cell
+     * keeps the same "Start here" action every other cell has.
+     */
+    const val GRID_CURRENT = "Current card"
+
+    const val GRID_TODAY = "Today"
+    const val GRID_YESTERDAY = "Yesterday"
+
+    /**
+     * The grid's count line.
+     *
+     * States the marked figure even at zero. On the screen where marking happens, "nothing
+     * marked" is a fact worth having; a subtitle that appeared only once you had marked
+     * something would leave a new user wondering what the screen was for.
+     *
+     * Never says anything about space freed — moving to the trash frees nothing until the
+     * trash is emptied (spec §9, rule 2), so the size here is described as marked, not as
+     * saved.
+     */
+    fun gridSubtitle(total: Int, marked: Int, size: String): String =
+        if (marked == 0) {
+            "${grouped(total)} items · nothing marked"
+        } else {
+            "${grouped(total)} items · ${grouped(marked)} marked · $size"
+        }
+
 }

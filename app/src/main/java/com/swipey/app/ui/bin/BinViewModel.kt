@@ -28,6 +28,12 @@ data class BinUiState(
     // half (a no-op re-entry into start()); this is what stops the second tap.
     val restoring: Boolean = false,
     /**
+     * The delete-side twin of [restoring], and separate from it on purpose: the two
+     * buttons disable together while either is in flight, but the screen has to be able to
+     * say *which* irreversible thing it is in the middle of, and a shared flag cannot.
+     */
+    val deleting: Boolean = false,
+    /**
      * Whole-branch review, I4 (spec §12: "empty state with retry; never crash"). Distinct
      * from an empty [entries] list: "your bin is empty" and "we couldn't read your bin"
      * are opposite claims, and only one of them is safe to make after a query threw. The
@@ -72,6 +78,23 @@ class BinViewModel(
         val selected = _state.value.selected
         _state.value = _state.value.copy(
             selected = if (id in selected) selected - id else selected + id,
+        )
+    }
+
+    /**
+     * Selects every item the Bin is currently showing, or clears the selection if that is
+     * already all of them.
+     *
+     * Scoped to [BinUiState.entries] rather than to "everything in the phone's trash",
+     * which is the distinction the footer exists to draw: items other apps trashed are
+     * counted there but never listed here, and a Select all that silently reached them
+     * would hand the Delete button things the user has never seen.
+     */
+    fun toggleSelectAll() {
+        val entries = _state.value.entries
+        val all = entries.map { it.record.mediaId }.toSet()
+        _state.value = _state.value.copy(
+            selected = if (_state.value.selected.size == all.size) emptySet() else all,
         )
     }
 
@@ -134,6 +157,47 @@ class BinViewModel(
         _state.value = _state.value.copy(restoring = false, restoreMessage = Copy.RESTORE_FAILED)
     }
 
+    /**
+     * Builds the consent-dialog requests that permanently delete the current selection.
+     *
+     * No durable row is written first, unlike [beginRestore] — see
+     * [TrashRepository.buildDeleteRequests] for why a deletion needs no bookkeeping to be
+     * verifiable afterwards. The flag is still set before the binder work, for the same
+     * reason the restore side sets it: the window between this tap and the dialog appearing
+     * is long enough to tap again.
+     */
+    fun beginDelete(): List<PendingIntent> {
+        val records = selectedRecords()
+        if (records.isEmpty()) return emptyList()
+        _state.value = _state.value.copy(deleting = true)
+        return repository.buildDeleteRequests(records)
+    }
+
+    /**
+     * The delete flow's terminal callback.
+     *
+     * Counted from [RecoveryReport.vanished] — the ids the reconciliation pass could no
+     * longer find live rows for — and never from the dialog's result code, which
+     * MediaProvider sets to OK regardless. That is also why a part-approved batch reports
+     * honestly: whatever survived is still in the list behind this message.
+     */
+    fun onDeleteFinished(attemptedIds: List<Long>, report: RecoveryReport) {
+        viewModelScope.launch {
+            val message = if (attemptedIds.isEmpty()) {
+                null
+            } else {
+                Copy.deleteOutcome(attemptedIds.count { it in report.vanished }, attemptedIds.size)
+            }
+            queryCatching { reload(restoreMessage = message) }
+                .onFailure { _state.value = BinUiState(loading = false, failed = true) }
+        }
+    }
+
+    /** The delete-side equivalent of [onRestoreFailed]. */
+    fun onDeleteFailed() {
+        _state.value = _state.value.copy(deleting = false, restoreMessage = Copy.DELETE_FAILED)
+    }
+
     /** Re-reads reconciled state. Does not itself call verifyAndResolve() — see call sites. */
     private suspend fun reload(restoreMessage: String?) {
         val view = repository.binView()
@@ -167,6 +231,7 @@ class BinViewModel(
             selected = emptySet(),
             restoreMessage = restoreMessage,
             restoring = false,
+            deleting = false,
         )
     }
 }
