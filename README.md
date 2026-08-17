@@ -6,7 +6,7 @@
 
 <br>
 
-[![Download the APK](https://img.shields.io/badge/Download%20APK-v1.0%20%C2%B7%2026%20MB-2F6BFF?style=for-the-badge&logo=android&logoColor=white&labelColor=17191C)](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)
+[![Download the APK](https://img.shields.io/badge/Download%20APK-v1.1%20%C2%B7%2026%20MB-2F6BFF?style=for-the-badge&logo=android&logoColor=white&labelColor=17191C)](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)
 
 <br>
 
@@ -97,13 +97,14 @@ like this one.
 
 ## Make it yours
 
-Three settings, behind the ☰ menu on the home screen. Each one says in plain words what it
+Four settings, behind the ☰ menu on the home screen. Each one says in plain words what it
 is currently doing, so you can read the screen without opening anything.
 
 | Setting | What it does |
 |---|---|
 | **Appearance** | Light or dark. Until you choose, Swipey follows whatever your phone is set to. The deck itself stays dark either way — a photograph judged against a white page is a different photograph. |
 | **Swipe direction** | Which side bins. Left by default; flip it and the drag, the badge, the two buttons under the card and the first-run hints all swap together. |
+| **Haptic feedback** | Whether the deck answers your thumb — a tick as a swipe passes the point of no return, a knock when it lands. You are looking at the photograph, not at the control, so that confirmation usually arrives through your hand. |
 | **Video sound** | Whether clips start with their sound on. Muting one during a session still carries to the clips after it; every launch starts again from this setting. |
 
 <br>
@@ -166,7 +167,7 @@ appears there.
 
 <div align="center">
 
-**[⬇ Download Swipey v1.0](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)** · 26 MB · Android 13+
+**[⬇ Download Swipey v1.1](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)** · 26 MB · Android 13+
 
 <sub>Built by <a href="https://github.com/GarikMartikyan">Garik Martikyan</a></sub>
 
