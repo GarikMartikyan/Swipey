@@ -398,6 +398,76 @@ object SwipeyIcons {
     }
 
     /**
+     * A handset shaking between two zigzags — haptic feedback.
+     *
+     * A zigzag rather than the concentric arcs the rest of the set uses for things leaving a
+     * device, and deliberately: [SoundOn]'s arcs say *radiating*, which is right for sound
+     * and wrong for a buzz. A zigzag says *oscillating*, and the handset between two of them
+     * reads as shaking rather than broadcasting.
+     *
+     * Settings shows this or [HapticsOff] depending on which way the setting is set, on the
+     * same reasoning as [Sun] and [Moon].
+     */
+    val Haptics: ImageVector = icon("Haptics") {
+        // Handset: eight units wide, one-unit corners so it reads as a phone, not a bar.
+        moveTo(9f, 5f)
+        lineTo(15f, 5f)
+        arcTo(1f, 1f, 0f, false, true, 16f, 6f)
+        lineTo(16f, 18f)
+        arcTo(1f, 1f, 0f, false, true, 15f, 19f)
+        lineTo(9f, 19f)
+        arcTo(1f, 1f, 0f, false, true, 8f, 18f)
+        lineTo(8f, 6f)
+        arcTo(1f, 1f, 0f, false, true, 9f, 5f)
+        close()
+        // Left zigzag, then right, mirrored about the centre line.
+        zigzags()
+    }
+
+    /**
+     * [Haptics] struck through.
+     *
+     * Not the cross-where-the-waves-were that [SoundOff] uses, because the zigzags are the
+     * half of this glyph a cross would have to replace, and two crosses beside a phone reads
+     * as an error state rather than as a setting turned off. A slash corner to corner is
+     * unambiguous — and the handset is drawn **broken** where the slash passes, so the two
+     * shapes read as one mark rather than as a line laid on top of an intact phone.
+     */
+    val HapticsOff: ImageVector = icon("HapticsOff") {
+        // The handset's lower-left run: down the left edge, round the bottom, and up the
+        // right as far as the slash.
+        moveTo(8f, 8f)
+        lineTo(8f, 18f)
+        arcTo(1f, 1f, 0f, false, false, 9f, 19f)
+        lineTo(15f, 19f)
+        arcTo(1f, 1f, 0f, false, false, 16f, 18f)
+        lineTo(16f, 16f)
+        // And its upper-right run, picking up on the far side of the slash.
+        moveTo(16f, 10.34f)
+        lineTo(16f, 6f)
+        arcTo(1f, 1f, 0f, false, false, 15f, 5f)
+        lineTo(10.66f, 5f)
+        zigzags()
+        // The slash, corner to corner.
+        moveTo(2f, 2f)
+        lineTo(22f, 22f)
+    }
+
+    /** The shake, either side of the handset. Shared so the pair cannot drift apart. */
+    private fun PathBuilder.zigzags() {
+        moveTo(2f, 8f)
+        lineTo(4f, 10f)
+        lineTo(2f, 12f)
+        lineTo(4f, 14f)
+        lineTo(2f, 16f)
+        moveTo(22f, 8f)
+        lineTo(20f, 10f)
+        lineTo(22f, 12f)
+        lineTo(20f, 14f)
+        lineTo(22f, 16f)
+    }
+
+    /**
      * Two arrows, one going each way — which side of the deck bins.
      *
      * Not [Bin], and not [Shuffle]. The bin glyph would name the outcome and say nothing

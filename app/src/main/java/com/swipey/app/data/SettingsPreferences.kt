@@ -13,8 +13,8 @@ enum class ThemeChoice { LIGHT, DARK }
 /**
  * Everything the Settings screen decides, as one value.
  *
- * One object rather than three flows because the screen shows all three at once and the app
- * reads them from one [androidx.compose.runtime.CompositionLocal]: three separate flows would
+ * One object rather than four flows because the screen shows all four at once and the app
+ * reads them from one [androidx.compose.runtime.CompositionLocal]: four separate flows would
  * be three separate recomposition triggers for a value that only ever changes one field at a
  * time anyway.
  *
@@ -24,15 +24,20 @@ enum class ThemeChoice { LIGHT, DARK }
  * @property videoSound whether a clip starts with its sound on. A *starting* value only: what
  *   the user does with the sound button afterwards is theirs for the rest of the run, and is
  *   deliberately not written back here. See `VideoSound`.
+ * @property haptics whether the deck answers a thumb at all. On by default, because the
+ *   feedback carries information here rather than decoration — see
+ *   [com.swipey.app.ui.design.SwipeyHaptics] — and off for anyone who finds a phone buzzing
+ *   in their hand every few seconds worse than the information is worth.
  */
 data class Settings(
     val theme: ThemeChoice,
     val binSide: BinSide,
     val videoSound: Boolean,
+    val haptics: Boolean,
 )
 
 /**
- * The three choices the app remembers about itself, and the only place they are written.
+ * The four choices the app remembers about itself, and the only place they are written.
  *
  * ### Why this is read on the main thread, when `HomePreferences` is not
  * [HomePreferences] hops to IO for every touch, because a bookmark and a layout toggle are
@@ -41,7 +46,7 @@ data class Settings(
  * Read it late and the app opens in the wrong palette and corrects itself a frame later,
  * which is a flash of white on a dark phone — the single most visible bug a theme setting can
  * have. So this one file is parsed synchronously, once, on the way to the first composition.
- * It holds three keys.
+ * It holds four keys.
  *
  * Deliberately a second file rather than three more keys in `swipey.home`. That file is
  * written on **every swipe** (the resume bookmark), and settings are written a handful of
@@ -89,6 +94,8 @@ class SettingsPreferences(context: Context) {
 
     fun setVideoSound(on: Boolean) = write { putBoolean(KEY_VIDEO_SOUND, on) }
 
+    fun setHaptics(on: Boolean) = write { putBoolean(KEY_HAPTICS, on) }
+
     /**
      * `commit()`, not `apply()`, and it is the difference that matters here.
      *
@@ -113,6 +120,9 @@ class SettingsPreferences(context: Context) {
         // On out of the box. The point of the setting is to hear the clips; shipping it off
         // would make the feature look broken until you found the switch that turns it on.
         videoSound = prefs.getBoolean(KEY_VIDEO_SOUND, true),
+        // On, which is how the deck has always behaved. This setting exists to turn
+        // something off, not to introduce it.
+        haptics = prefs.getBoolean(KEY_HAPTICS, true),
     )
 
     private companion object {
@@ -120,5 +130,6 @@ class SettingsPreferences(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_BIN_SIDE = "bin_side"
         const val KEY_VIDEO_SOUND = "video_sound"
+        const val KEY_HAPTICS = "haptics"
     }
 }

@@ -156,6 +156,21 @@ object Copy {
     const val SETTINGS_SIDE_RIGHT_SUB = "Flick right to bin, left to keep"
 
     /**
+     * Haptic feedback.
+     *
+     * "Haptic feedback" rather than "Vibration", which is what a phone calls the thing that
+     * happens when it rings. This is a much smaller signal doing a specific job: the user is
+     * looking at a photograph, not at the control they just used, so the confirmation that a
+     * decision landed arrives through their thumb. The line underneath says so, because
+     * "on" would otherwise be a setting about buzzing rather than about knowing.
+     */
+    const val SETTINGS_HAPTICS = "Haptic feedback"
+    const val SETTINGS_HAPTICS_ON = "A tick at the point of no return, a knock when it lands"
+    const val SETTINGS_HAPTICS_OFF = "The deck stays still under your thumb"
+    const val SETTINGS_HAPTICS_ON_SUB = "Feel a decision land without looking away from the photo"
+    const val SETTINGS_HAPTICS_OFF_SUB = "Nothing vibrates, whatever you swipe"
+
+    /**
      * The video sound default.
      *
      * "Video sound" and not "Start videos with sound", because the row is a heading now and

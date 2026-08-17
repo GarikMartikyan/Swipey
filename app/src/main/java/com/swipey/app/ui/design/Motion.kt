@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -67,9 +68,17 @@ object SwipeyMotion {
  * `performHapticFeedback` calls.
  *
  * Obtain one with [rememberSwipeyHaptics].
+ *
+ * @param enabled false silences all three verbs. Held here, at the one place every haptic
+ *   in the app passes through, rather than checked at the call sites — there are only two
+ *   of them today, and a setting each of them had to remember to honour would be a setting
+ *   the third one silently ignores.
  */
 @Stable
-class SwipeyHaptics internal constructor(private val feedback: HapticFeedback) {
+class SwipeyHaptics internal constructor(
+    private val feedback: HapticFeedback,
+    private val enabled: Boolean,
+) {
 
     /**
      * A decision has been recorded — a card committed to Keep or Bin, or a batch moved to
@@ -77,6 +86,7 @@ class SwipeyHaptics internal constructor(private val feedback: HapticFeedback) {
      * miss.
      */
     fun commit() {
+        if (!enabled) return
         feedback.performHapticFeedback(HapticFeedbackType.LongPress)
     }
 
@@ -86,6 +96,7 @@ class SwipeyHaptics internal constructor(private val feedback: HapticFeedback) {
      * happened, not more.
      */
     fun undo() {
+        if (!enabled) return
         feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 
@@ -94,13 +105,25 @@ class SwipeyHaptics internal constructor(private val feedback: HapticFeedback) {
      * crossing, so the user can feel the threshold without looking for it.
      */
     fun threshold() {
+        if (!enabled) return
         feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 }
+
+/**
+ * Whether haptics fire at all, for the whole tree.
+ *
+ * Declared here rather than read from the settings package, so the design system does not
+ * have to know that a Settings screen exists. The root provides it; see
+ * `ui/settings/LocalSettings.kt`. Defaulted to true, so a `@Preview` or a component lifted
+ * out of the tree behaves the way the app does.
+ */
+val LocalSwipeyHapticsEnabled = staticCompositionLocalOf { true }
 
 /** Remembers a [SwipeyHaptics] bound to the current haptic feedback handler. */
 @Composable
 fun rememberSwipeyHaptics(): SwipeyHaptics {
     val feedback = LocalHapticFeedback.current
-    return remember(feedback) { SwipeyHaptics(feedback) }
+    val enabled = LocalSwipeyHapticsEnabled.current
+    return remember(feedback, enabled) { SwipeyHaptics(feedback, enabled) }
 }

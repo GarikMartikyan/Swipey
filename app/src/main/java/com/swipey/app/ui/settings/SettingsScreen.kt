@@ -35,13 +35,13 @@ private val RowIcon = 22.dp
 private val MarkerSize = 20.dp
 
 /** Which setting's sheet is open, or none. */
-private enum class Editing { THEME, BIN, SOUND }
+private enum class Editing { THEME, BIN, HAPTICS, SOUND }
 
 /**
- * Everything the app remembers about itself: a palette, a swipe direction, and whether
- * clips arrive with their sound on.
+ * Everything the app remembers about itself: a palette, a swipe direction, whether the deck
+ * answers a thumb, and whether clips arrive with their sound on.
  *
- * ### Three rows, and each one is a sentence
+ * ### A row per setting, and each one is a sentence
  * A row per setting, and under each one a line saying what is true right now — "Swipe left
  * to bin, right to keep", rewritten the moment it stops being true. No values in the right
  * margin. The conventional arrangement, a name and its value, works only for a reader who
@@ -53,10 +53,10 @@ private enum class Editing { THEME, BIN, SOUND }
  * between Left and Right is the instant that description is most wanted.
  *
  * ### The glyphs say which state, not which setting
- * The appearance row shows a sun or a moon depending on which palette is in force, and the
- * sound row a speaker plain or struck through. A neutral "appearance" mark would say only
- * that a theme setting exists — something the word beside it already says. See
- * [SwipeyIcons.Sun].
+ * The appearance row shows a sun or a moon depending on which palette is in force; the sound
+ * and haptics rows show their glyph plain or struck through. A neutral "appearance" mark
+ * would say only that a theme setting exists — something the word beside it already says.
+ * See [SwipeyIcons.Sun].
  *
  * ### Applied on the tap
  * Every choice takes effect immediately and there is no confirmation: the palette repaints
@@ -69,6 +69,7 @@ fun SettingsScreen(
     settings: Settings,
     onTheme: (ThemeChoice) -> Unit,
     onBinSide: (BinSide) -> Unit,
+    onHaptics: (Boolean) -> Unit,
     onVideoSound: (Boolean) -> Unit,
 ) {
     var editing by remember { mutableStateOf<Editing?>(null) }
@@ -77,15 +78,16 @@ fun SettingsScreen(
 
     SwipeyScreen(
         overlay = {
-            // One sheet, told what it is about, rather than three sheets each held in their
-            // own visibility flag: only one can ever be open, and three flags is three ways
-            // for two to be.
+            // One sheet, told what it is about, rather than one per setting each held in its
+            // own visibility flag: only one can ever be open, and four flags would be four
+            // ways for two to be.
             SwipeySheet(
                 visible = editing != null,
                 onDismiss = { editing = null },
                 title = when (editing) {
                     Editing.THEME -> Copy.SETTINGS_APPEARANCE
                     Editing.BIN -> Copy.SETTINGS_BIN_SIDE
+                    Editing.HAPTICS -> Copy.SETTINGS_HAPTICS
                     Editing.SOUND -> Copy.SETTINGS_VIDEO_SOUND
                     // Held through the exit animation: the sheet stays composed while it
                     // slides away, and a title that vanished on the first frame of that
@@ -122,6 +124,21 @@ fun SettingsScreen(
                             selected = !binOnLeft,
                             divider = false,
                             onClick = { onBinSide(BinSide.RIGHT); editing = null },
+                        )
+                    }
+                    Editing.HAPTICS -> {
+                        Choice(
+                            title = Copy.SETTINGS_ON,
+                            subtitle = Copy.SETTINGS_HAPTICS_ON_SUB,
+                            selected = settings.haptics,
+                            onClick = { onHaptics(true); editing = null },
+                        )
+                        Choice(
+                            title = Copy.SETTINGS_OFF,
+                            subtitle = Copy.SETTINGS_HAPTICS_OFF_SUB,
+                            selected = !settings.haptics,
+                            divider = false,
+                            onClick = { onHaptics(false); editing = null },
                         )
                     }
                     Editing.SOUND -> {
@@ -167,6 +184,14 @@ fun SettingsScreen(
                 title = Copy.SETTINGS_BIN_SIDE,
                 says = Copy.settingsBinSays(binOnLeft),
                 onClick = { editing = Editing.BIN },
+            )
+            // Beside Swipe direction rather than at the end: both of these are about how the
+            // deck answers a thumb, and they are the pair a user comparing them wants together.
+            SettingRow(
+                icon = if (settings.haptics) SwipeyIcons.Haptics else SwipeyIcons.HapticsOff,
+                title = Copy.SETTINGS_HAPTICS,
+                says = if (settings.haptics) Copy.SETTINGS_HAPTICS_ON else Copy.SETTINGS_HAPTICS_OFF,
+                onClick = { editing = Editing.HAPTICS },
             )
             SettingRow(
                 icon = if (settings.videoSound) SwipeyIcons.SoundOn else SwipeyIcons.SoundOff,

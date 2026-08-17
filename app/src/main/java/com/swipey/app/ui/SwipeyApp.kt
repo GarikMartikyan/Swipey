@@ -161,6 +161,7 @@ fun SwipeyRoot(app: SwipeyApp) {
                     settings = settings,
                     onTheme = app.settingsPreferences::setTheme,
                     onBinSide = app.settingsPreferences::setBinSide,
+                    onHaptics = app.settingsPreferences::setHaptics,
                     onVideoSound = { on ->
                         app.settingsPreferences.setVideoSound(on)
                         // The run's own sound decision is thrown away, so the next clip
