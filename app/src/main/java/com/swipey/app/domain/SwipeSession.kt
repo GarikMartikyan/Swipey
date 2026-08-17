@@ -24,6 +24,16 @@ class SwipeSession(private val queue: List<MediaItem>) {
     val markedCount: Int get() = marked.size
     val markedBytes: Long get() = marked.values.sumOf { it.sizeBytes }
 
+    /**
+     * The item [offset] places ahead of [current], or null if the queue ends first.
+     *
+     * The deck draws `peek(1)` underneath the card being swiped, so the next photograph is
+     * already on screen when the current one leaves rather than appearing into bare canvas
+     * afterwards. Bounds-safe at both ends, so a caller near the end of the queue does not
+     * have to check first.
+     */
+    fun peek(offset: Int): MediaItem? = queue.getOrNull(position + offset)
+
     fun swipeLeft(): MediaItem? = advance(Decision.MARK)
 
     fun swipeRight(): MediaItem? = advance(Decision.KEEP)

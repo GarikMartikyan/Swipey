@@ -1,0 +1,889 @@
+<title>Swipey Build List</title>
+<style>
+  :root {
+    --canvas: #FCFCFD;
+    --surface: #FFFFFF;
+    --strong: #F2F3F5;
+    --hairline: #E4E5E8;
+    --hairline-soft: #EDEEF0;
+    --text: #0E0F11;
+    --text2: #6B7076;
+    --text3: #A0A4AA;
+    --accent: #1D51D6;
+    --accent-soft: #E8EDFC;
+    --warn: #9A5B00;
+    --warn-soft: #FCF0DC;
+    --code-bg: #F4F5F7;
+    --shadow: 0 1px 2px rgba(14,15,17,.05), 0 12px 32px rgba(14,15,17,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #0E0F11; --surface: #17191C; --strong: #1F2226;
+      --hairline: #24262A; --hairline-soft: #1E2024;
+      --text: #FAFAFA; --text2: #8B9097; --text3: #5A5F66;
+      --accent: #2F6BFF; --accent-soft: #16233F;
+      --warn: #E3B15F; --warn-soft: #2B2314;
+      --code-bg: #1B1E22; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas: #0E0F11; --surface: #17191C; --strong: #1F2226;
+    --hairline: #24262A; --hairline-soft: #1E2024;
+    --text: #FAFAFA; --text2: #8B9097; --text3: #5A5F66;
+    --accent: #2F6BFF; --accent-soft: #16233F;
+    --warn: #E3B15F; --warn-soft: #2B2314;
+    --code-bg: #1B1E22; --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 56px 22px 110px; }
+
+  code, pre, .mono, .eff, .rank {
+    font-family: ui-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-ligatures: none;
+  }
+  .mono { font-size: 11px; letter-spacing: .11em; text-transform: uppercase; color: var(--text3); }
+
+  /* ---------- header ---------- */
+  header { padding-bottom: 34px; }
+  h1 {
+    margin: 14px 0 0;
+    font-size: clamp(33px, 5.4vw, 50px);
+    line-height: 1.04; letter-spacing: -.035em; font-weight: 640;
+    text-wrap: balance;
+  }
+  .lede { margin: 18px 0 0; max-width: 64ch; color: var(--text2); font-size: 17.5px; }
+  .lede em { color: var(--text); font-style: normal; font-weight: 550; }
+
+  .method {
+    margin-top: 26px; display: flex; flex-wrap: wrap; gap: 1px;
+    background: var(--hairline); border: 1px solid var(--hairline);
+    border-radius: 12px; overflow: hidden;
+  }
+  .method div { background: var(--surface); padding: 12px 18px; flex: 1 1 130px; }
+  .method b { display: block; font-size: 21px; font-weight: 640; letter-spacing: -.02em;
+              font-variant-numeric: tabular-nums; }
+  .method span { font-size: 12.5px; color: var(--text2); }
+
+  /* ---------- headline pick ---------- */
+  .headline {
+    margin: 40px 0 0; background: var(--surface); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--accent);
+    border-radius: 14px; padding: 26px 28px; box-shadow: var(--shadow);
+  }
+  .headline h2 { margin: 8px 0 12px; font-size: 25px; letter-spacing: -.022em; font-weight: 640; }
+  .headline p { margin: 0 0 12px; color: var(--text2); }
+  .headline p:last-child { margin-bottom: 0; }
+  .headline strong { color: var(--text); font-weight: 600; }
+
+  /* ---------- filter bar ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    margin: 46px 0 0; padding: 12px 0;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--hairline);
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .bar .sep { width: 1px; height: 22px; background: var(--hairline); margin: 0 6px; }
+  button.f {
+    font: inherit; font-size: 13.5px; font-weight: 520;
+    padding: 6px 13px; border-radius: 999px; cursor: pointer;
+    background: var(--surface); color: var(--text2);
+    border: 1px solid var(--hairline);
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  button.f:hover { color: var(--text); }
+  button.f[aria-pressed="true"] {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  button.f:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .count { margin-left: auto; font-size: 13px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+  /* ---------- tiers ---------- */
+  .tier { margin-top: 52px; }
+  .tier > h2 {
+    margin: 0; font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+    font-weight: 640; color: var(--text3);
+    font-family: ui-mono, ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .tier > .tsub { margin: 8px 0 0; color: var(--text2); max-width: 60ch; }
+  .tier[hidden] { display: none; }
+
+  /* ---------- items ---------- */
+  .item {
+    padding: 30px 0; border-top: 1px solid var(--hairline-soft);
+    display: grid; grid-template-columns: 44px 1fr; gap: 0 18px; align-items: start;
+  }
+  .item:first-of-type { border-top: 1px solid var(--hairline); }
+  .item[hidden] { display: none; }
+  @media (max-width: 620px) { .item { grid-template-columns: 1fr; gap: 10px; } }
+
+  .rank {
+    font-size: 14px; font-weight: 600; color: var(--text3);
+    font-variant-numeric: tabular-nums; padding-top: 4px;
+  }
+
+  .item h3 {
+    margin: 0 0 8px; font-size: 20.5px; letter-spacing: -.02em; font-weight: 620;
+    line-height: 1.3; text-wrap: balance;
+  }
+  .feel { margin: 0 0 14px; color: var(--text); }
+  .fix { margin: 0 0 12px; color: var(--text2); font-size: 15px; }
+  .fix:last-of-type { margin-bottom: 0; }
+  .item ul { margin: 0 0 12px; padding-left: 20px; color: var(--text2); font-size: 15px; }
+  .item li { margin-bottom: 8px; }
+
+  code {
+    font-size: .875em; background: var(--code-bg); color: var(--text);
+    padding: 1.5px 5px; border-radius: 5px; word-break: break-word;
+  }
+  pre {
+    margin: 0 0 14px; background: var(--code-bg); border: 1px solid var(--hairline);
+    border-radius: 10px; padding: 13px 15px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.55; color: var(--text);
+  }
+  .copy { border-left: 3px solid var(--accent); }
+  .copy::before {
+    content: "SHIPS AS USER-VISIBLE COPY"; display: block;
+    font-size: 10px; letter-spacing: .12em; color: var(--text3); margin-bottom: 7px;
+  }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+  .eff {
+    font-size: 11px; font-weight: 700; letter-spacing: .06em;
+    padding: 3px 9px; border-radius: 6px;
+    background: var(--strong); color: var(--text2); border: 1px solid var(--hairline);
+  }
+  .eff.S { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .eff.L { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .files { font-size: 12px; color: var(--text3); font-family: ui-mono, ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* ---------- closing blocks ---------- */
+  .pkg { margin-top: 56px; }
+  .pkg h2, .solid h2 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.022em; font-weight: 640; }
+  .pkgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 20px; }
+  .pkgcard { background: var(--surface); border: 1px solid var(--hairline); border-radius: 13px; padding: 18px 20px; }
+  .pkgcard b { display: block; margin-bottom: 6px; font-weight: 620; }
+  .pkgcard p { margin: 0; font-size: 14.5px; color: var(--text2); }
+
+  .solid { margin-top: 56px; background: var(--strong); border-radius: 16px; padding: 28px 30px; }
+  .solid p { color: var(--text2); max-width: 66ch; }
+  .solid p:last-child { margin-bottom: 0; }
+  .solid strong { color: var(--text); font-weight: 600; }
+
+  footer { margin-top: 56px; padding-top: 26px; border-top: 1px solid var(--hairline); color: var(--text3); font-size: 14px; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <span class="mono">Swipey · UX audit · 16 Aug 2026</span>
+    <h1>The foundations are right. What's missing is confirmation.</h1>
+    <p class="lede">Six independent audits swept the app — the deck loop, home and navigation, the
+    commit flow, the bin, first-run and error states, accessibility and craft. Almost every
+    high-value finding turned out to be <em>the same shape</em>: the user does something, and Swipey
+    doesn't tell them it landed. A flick that doesn't commit. A swipe that reveals bare canvas. An
+    Undo that buzzes and does nothing. A system dialog nobody warned them about. Twenty minutes of
+    marks that a phone call erases.</p>
+    <p class="lede">Fix confirmation and the app stops feeling like a prototype — without changing a
+    single screen's structure.</p>
+
+    <div class="method">
+      <div><b>6</b><span>audit lenses</span></div>
+      <div><b>51</b><span>findings survived</span></div>
+      <div><b>6</b><span>killed on verification</span></div>
+      <div><b>22</b><span>ranked items</span></div>
+    </div>
+  </header>
+
+  <div class="headline">
+    <span class="mono">The one to do first</span>
+    <h2>The swipe threshold is calibrated for a 60&nbsp;Hz phone. Yours is 120.</h2>
+    <p><code>SwipeCard.kt:256</code> estimates fling velocity as <code>dragAmount * 60f</code>. On a
+    120&nbsp;Hz display each frame's delta is half as large, so the <code>FlingVelocity = 1500f</code>
+    gate is effectively doubled and <strong>roughly half your quick flicks snap back instead of
+    committing</strong>. It also samples only the final frame, so a flick that eases off reads as
+    near-zero.</p>
+    <p>You experience this as the app's only gesture inexplicably refusing.</p>
+    <p>It beats the runners-up on every axis: about an hour of work, a one-for-one swap with no design
+    decision attached, it affects every interaction in the app rather than one screen, and it fixes
+    something that currently reads as <em>“this app is broken”</em> rather than <em>“this app is
+    missing a feature.”</em> Prefetching is felt more often but costs a day; the permission copy saves
+    more installs but only for people who tap the wrong option.</p>
+  </div>
+
+  <div class="bar" role="group" aria-label="Filter the list">
+    <button class="f" data-tier="all" aria-pressed="true">All</button>
+    <button class="f" data-tier="1" aria-pressed="false">Changes the feel</button>
+    <button class="f" data-tier="2" aria-pressed="false">Removes friction</button>
+    <button class="f" data-tier="3" aria-pressed="false">Polish</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="f" data-eff="S" aria-pressed="false">S</button>
+    <button class="f" data-eff="M" aria-pressed="false">M</button>
+    <button class="f" data-eff="L" aria-pressed="false">L</button>
+    <span class="count" id="count"></span>
+  </div>
+
+  <!-- ============ TIER 1 ============ -->
+  <section class="tier" data-tier="1">
+    <h2>Tier 1 · Changes the feel of the app</h2>
+    <p class="tsub">Ranked by user impact divided by effort — the numbering is the order, not a
+    category.</p>
+
+    <div class="item" data-eff="S">
+      <div class="rank">01</div>
+      <div>
+        <h3>Real velocity tracking on the swipe</h3>
+        <p class="feel">Half your quick flicks snap back instead of committing, because the fling gate
+        assumes 60&nbsp;fps.</p>
+        <p class="fix">Feed <code>androidx.compose.ui.input.pointer.util.VelocityTracker</code> from
+        <code>change.uptimeMillis</code>/<code>change.position</code> in <code>onHorizontalDrag</code>,
+        read <code>calculateVelocity().x</code> in <code>onDragEnd</code>, reset in
+        <code>onDragCancel</code> and after commit. Leave the position-wins-past-threshold logic at
+        <code>:227-235</code> alone.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/deck/SwipeCard.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">02</div>
+      <div>
+        <h3>Preload and show the next card</h3>
+        <p class="feel">Every swipe reveals bare canvas and then the next photo pops in. At one swipe
+        every two seconds, that flash <em>is</em> the texture of the app.</p>
+        <p class="fix"><code>publish()</code> hardcodes <code>next = null</code>
+        (<code>DeckViewModel.kt:149</code>), so the declared <code>next</code> field at <code>:25</code>
+        is dead. Add <code>fun peek(offset: Int)</code> to <code>SwipeSession</code>, publish
+        <code>next = session.peek(1)</code>, and render it as a real under-card at 0.98 scale beneath
+        <code>SwipeCard</code>.</p>
+        <p class="fix">Verify a video-frame decoder is registered in the Coil <code>ImageLoader</code>
+        before relying on <code>AsyncImage</code> for video peeks; otherwise leave the under-layer
+        empty for video rather than shipping a blank.</p>
+        <div class="meta"><span class="eff">M</span><span class="files">ui/deck/DeckViewModel.kt · SwipeSession.kt · DeckScreen.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">03</div>
+      <div>
+        <h3>Warn before Android's own dialog appears</h3>
+        <p class="feel">The app's biggest anxiety spike: you tap “Move 47 items to trash” and an
+        unfamiliar Google-styled sheet saying <em>delete</em> appears with no warning. Rule&nbsp;5
+        already forces this warning for restores — but only behind the ⓘ, where almost nobody taps.</p>
+        <pre class="copy">TRASH_CONFIRM_NOTE = "Android will ask you to confirm
+the move. Its dialog is part of your phone, not Swipey."</pre>
+        <ul>
+          <li>Make it the first entry of <code>reviewDisclosures(batches)</code> <em>and</em> render it
+          inline at <code>typography.label</code>/<code>textSecondary</code> immediately above the
+          commit button.</li>
+          <li>Render <code>Copy.RESTORE_CONFIRM_NOTE</code> verbatim above the Restore button whenever
+          <code>state.selected.isNotEmpty()</code> — selection-gated, so an idle Bin stays clean.</li>
+          <li>Give <code>binDisclosures</code> a <code>batches</code> parameter and append
+          <code>Copy.multipleConfirmations(batches)</code> when <code>batches &gt; 1</code>.
+          <code>MAX_URIS_PER_REQUEST = 500</code>, so a 600-item commit raises two dialogs today with
+          zero warning — and cancelling the second silently halves the commit.</li>
+        </ul>
+        <p class="fix">No required sentence changes; this only moves and adds occurrences.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">Copy.kt · DisclosureSheet.kt · ReviewScreen.kt:177 · BinScreen.kt:226</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">04</div>
+      <div>
+        <h3>Give Review exits</h3>
+        <p class="feel">Two dead ends on the screen holding your entire pile.</p>
+        <ul>
+          <li><strong>No <code>BackHandler</code>.</strong> One stray back-swipe discards every mark,
+          silently — while <code>DeckScreen.kt:106</code> protects the <em>same</em> marks with a
+          confirm dialog. Add the mirror dialog. Keep the handler <em>enabled</em> whenever
+          <code>items.isNotEmpty()</code> and swallow the press while <code>committing</code> —
+          disabling it during commit would pop Review outright and lose the marks in exactly the case
+          this fixes.</li>
+          <li><strong>Unmark everything and you're stranded</strong> on a centred grey “Nothing marked
+          yet” with no control at all, and Back drops you to Home because the Deck entry was popped.
+          Also fix the title — “nothing marked <em>yet</em>” is wrong for someone who just unmarked
+          forty things.</li>
+        </ul>
+        <pre class="copy">REVIEW_EMPTY_BODY = "You took everything back off this list.
+Nothing will be moved to trash."
+REVIEW_KEEP_LIST = "Keep the list"</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/review/ReviewScreen.kt:82,138 · ui/SwipeyApp.kt:198</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="L">
+      <div class="rank">05</div>
+      <div>
+        <h3>Don't lose the session to a phone call</h3>
+        <p class="feel">Process death during a call returns you to a deck whose counter has reset from
+        300/540 to 1/380 and whose marked chip is simply gone. Sixty decisions, unannounced.</p>
+        <p class="fix">Only KEEP is persisted (<code>DeckViewModel.kt:121</code>); every mark lives in
+        an in-memory map. Persist MARK the same way: drop the <code>keep &amp;&amp;</code> guard, add a
+        <code>decision = 'MARK'</code> query to <code>ReviewedMediaDao</code>, re-hydrate
+        <code>SwipeSession.marked</code> in <code>load()</code>.</p>
+        <p class="fix"><strong>Critical:</strong> the Discard path at <code>DeckScreen.kt:117</code>
+        must delete that session's MARK rows, or discarded marks silently re-appear on the next load.
+        The narrower version — <code>createSavedStateHandle()</code> holding marked ids and
+        <code>position</code> — buys most of this for a fraction of the work and is the sane first
+        cut.</p>
+        <div class="meta"><span class="eff L">L</span><span class="eff S">S–M narrow</span><span class="files">DeckViewModel.kt · DeckScreen.kt · data/db/ReviewedMedia.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">06</div>
+      <div>
+        <h3>Stop the last card teleporting to Review</h3>
+        <p class="feel">The session's final decision is permanently unrecoverable, and a mistakenly-kept
+        last photo is hidden from every future deck by a KEEP row.</p>
+        <p class="fix">The moment the last card commits with marks pending, <code>LaunchedEffect</code>
+        navigates away and <code>popUpTo(Routes.DECK) { inclusive = true }</code> burns the Deck entry.
+        The file already argues for the fix: the nothing-marked branch deliberately refuses to
+        auto-navigate <em>“so the session's last decision stays undoable.”</em> Delete the
+        auto-navigate, give the with-marks case the same terminal <code>DeckMessage</code> with a
+        <code>Review N items</code> primary and an Undo secondary, and drop the now-pointless
+        <code>popUpTo</code>.</p>
+        <div class="meta"><span class="eff">M</span><span class="files">ui/deck/DeckScreen.kt:127 · ui/SwipeyApp.kt:198</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">07</div>
+      <div>
+        <h3>Tell people to pick “Allow all”</h3>
+        <p class="feel">On Android 14+ the middle option (“Select photos”) reads as the safe choice and
+        bricks the app — irreversibly, since <code>READ_MEDIA_VISUAL_USER_SELECTED</code> can never be
+        escalated by re-requesting. The only exit is an unguided Settings trip.</p>
+        <pre class="copy">append to PERMISSION_BODY:
+"On the next screen choose Allow all — with only selected
+photos Swipey can't show you your bin, so it can't promise
+anything is recoverable."
+
+PERMISSION_SETTINGS_STEPS = "In Settings, open Permissions ›
+Photos and videos › Allow all."</pre>
+        <p class="fix">Render the second one via <code>Message()</code> in the PARTIAL and DENIED
+        branches only. Three copy changes, no structural work.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">Copy.kt · ui/permission/PermissionGate.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">08</div>
+      <div>
+        <h3>Undo must not lie</h3>
+        <p class="feel">On the first card of every session the Undo control is fully lit, and tapping it
+        fires a haptic and then changes nothing. On a screen where your thumb is the primary
+        confirmation channel, that's a direct falsehood about state.</p>
+        <p class="fix"><code>undoEnabled = !committing</code> → <code>undoEnabled = !committing &amp;&amp;
+        state.position &gt; 0</code>. <code>SwipeyIconButton</code> already dims correctly, and the same
+        file already uses this exact test at <code>:171</code>.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/deck/DeckScreen.kt:234</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">09</div>
+      <div>
+        <h3>Reopen finished albums</h3>
+        <p class="feel">A fully-reviewed album still advertises “412 · 3.1&nbsp;GB”, and tapping it lands
+        on “Nothing left to review” with one dead Done button — a wasted tap you had no way to avoid,
+        and no route to a second pass ever.</p>
+        <p class="fix">Every right-swipe writes a permanent KEEP row and nothing in the app clears one.
+        Fill <code>DeckMessage</code>'s free <code>secondary</code> slot, wired to a new
+        <code>startOver()</code> running <code>DELETE FROM reviewed_media WHERE decision = 'KEEP' AND
+        mediaId IN (:ids)</code> scoped to the album. The <code>decision = 'KEEP'</code> clause is
+        load-bearing — a bare <code>deleteAll(ids)</code> would orphan TRASHED rows and break the
+        Bin.</p>
+        <pre class="copy">DECK_START_OVER = "Swipe these again"
+DECK_ALL_KEPT_BODY = "You've already kept everything here.
+Swiping again won't change any of your photos — it just
+brings them back for a second look."</pre>
+        <div class="meta"><span class="eff">M</span><span class="files">DeckScreen.kt:156 · DeckViewModel.kt · ReviewedMedia.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">10</div>
+      <div>
+        <h3>Never show a card the user can't see</h3>
+        <p class="feel">A corrupt file, an unsupported codec or an unmounted SD card renders as an empty
+        canvas with the counter and controls floating over it — indistinguishable from a frozen app,
+        while you're being asked to make a decision.</p>
+        <p class="fix">There's no Coil error/placeholder handling anywhere in <code>ui/</code>, and no
+        <code>Player.Listener</code> on the ExoPlayer. Add the error state with <code>displayName</code>
+        and <code>formatBytes(sizeBytes)</code>; attach an <code>onPlayerError</code> listener in
+        <code>VideoCard</code> that renders the same panel (guard the nullable <code>durationMs</code>).
+        Keep Bin/Keep enabled — an item that can't be shown is exactly the one people want to bin.</p>
+        <pre class="copy">MEDIA_UNREADABLE = "This item can't be shown"</pre>
+        <div class="meta"><span class="eff">M</span><span class="files">ui/deck/DeckScreen.kt:494 · ui/deck/VideoCard.kt:93</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIER 2 ============ -->
+  <section class="tier" data-tier="2">
+    <h2>Tier 2 · Removes real friction</h2>
+    <p class="tsub">Worth doing next. Several of these are what make Tier 1's warnings necessary.</p>
+
+    <div class="item" data-eff="M">
+      <div class="rank">11</div>
+      <div>
+        <h3>Make the Bin usable at the scale Swipey creates</h3>
+        <p class="feel">Undoing a 120-photo session is 120 taps — no select-all, no clear-selection, and
+        no way to find anything in a flat wall of squares.</p>
+        <p class="fix">Add <code>selectAll()</code>/<code>clearSelection()</code> to
+        <code>BinViewModel</code> behind one <code>SwipeyChip</code> above the grid, and break the grid
+        into day sections using <code>GridItemSpan(maxLineSpan)</code> headers —
+        <code>Copy.binnedOn(day)</code> = “Binned today” / “Binned 12 Aug” — each carrying that group's
+        minimum expiry via <code>Copy.expiresAtLeast</code>, which also satisfies rule&nbsp;3 at group
+        granularity. Ship with item&nbsp;3: select-all is what makes batched restores real.</p>
+        <div class="meta"><span class="eff S">S chip</span><span class="eff">M grouping</span><span class="files">ui/bin/BinViewModel.kt:71 · BinScreen.kt:190,197</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">12</div>
+      <div>
+        <h3>Vanished items must explain themselves</h3>
+        <p class="feel">Someone whose Google Photos emptied the trash overnight opens the Bin to forty
+        missing thumbnails and total silence.</p>
+        <p class="fix"><code>refresh()</code> calls <code>verifyAndResolve()</code>, which
+        <em>deletes</em> the vanished rows before <code>reload()</code> re-reads them — so
+        <code>vanishedCount</code> is always 0 and the Bin's explanation is unreachable. Capture the
+        report and pass <code>report.vanished.size</code> through <code>reload()</code>, render at
+        <code>textPrimary</code>, and reword for both causes (restored-elsewhere counts as vanished
+        too). The current wording — “no longer in the trash”, shown seconds after trashing on Result —
+        reads as <em>we destroyed them</em>, and is the most alarming sentence the app can produce.</p>
+        <pre class="copy">"3 items weren't there any more — you or another app emptied
+them from your phone's trash, or moved them back out of it.
+Swipey didn't delete them."</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">BinViewModel.kt:65 · Copy.kt:245 · ResultScreen.kt:117</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">13</div>
+      <div>
+        <h3>Make the outcome screens say something</h3>
+        <p class="feel">Three fixes to the same moment — the one where you find out what actually
+        happened to your photos.</p>
+        <ul>
+          <li><strong>Result never shows a size.</strong> Add the spec's own sentence with the real
+          figure, summing <code>record.sizeBytes</code> in the existing
+          <code>report.confirmedTrashed</code> filter.</li>
+          <li><strong>Partial failure is a shrug with no route back.</strong> Reword against
+          <code>notTrashed</code> only, and add a primary “Try the remaining N again” that returns to
+          Review with only the unconfirmed ids still marked. Do <em>not</em> use
+          <code>total - done</code>: that sweeps vanished items into a sentence that is false about
+          them.</li>
+          <li><strong>Split <code>restoreOutcome</code> into three cases</strong> and re-select the
+          failures so “try again” is one tap.</li>
+        </ul>
+        <pre class="copy">"4.2 GB moved to trash — space is freed when the trash is
+emptied (about 30 days)."
+
+fun cancelled(pending: Int, total: Int) =
+  "$pending of $total items are still on your phone —
+   they weren't confirmed."
+
+full success   → "— they're back in your gallery."
+partial        → "The other N are still in the trash —
+                  select them and try again."</pre>
+        <div class="meta"><span class="eff">M</span><span class="files">ResultScreen.kt:78,114 · Copy.kt:208,254 · BinViewModel.kt:167</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="L">
+      <div class="rank">14</div>
+      <div>
+        <h3>Fix Home's counts and ordering</h3>
+        <p class="feel">Home counts the whole gallery; the deck counts what's left. By session five Home
+        says “2,573 items” and the deck it opens says “1 / 40”.</p>
+        <p class="fix"><code>keptIds</code> is already read one line above and thrown away. Add
+        <code>remainingCount</code>, then sort with <code>compareBy&lt;Album&gt; { it.remainingCount == 0
+        }.thenByDescending { it.totalBytes }</code> so cleared albums sink under a “Finished” header
+        instead of holding the top row.</p>
+        <p class="fix">Check both layouts — <code>AlbumTile</code> (<code>HomeScreen.kt:453</code>)
+        renders the same string at <code>maxLines = 1</code>, and the grid's <code>chunked(2)</code>
+        can't take a mid-list header, so split before chunking or omit it there. Pairs naturally with
+        item&nbsp;9.</p>
+        <pre class="copy">"1,204 left of 2,573 · newest first"
+albumSubtitle = "412 left · 3.1 GB"
+albumDone     = "All reviewed · 3.1 GB"</pre>
+        <div class="meta"><span class="eff L">L</span><span class="files">HomeViewModel.kt:112 · MediaItem.kt:72,78 · HomeScreen.kt · Copy.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">15</div>
+      <div>
+        <h3>Fix the plural</h3>
+        <p class="feel"><code>"Move 1 items to trash"</code> — on the commit button, at the exact moment
+        you decide whether to trust Swipey with your photos.</p>
+        <p class="fix">Add <code>private fun items(n: Int) = if (n == 1) "1 item" else "${'$'}{grouped(n)}
+        items"</code> and route <code>reviewAction</code>, <code>reviewHeader</code>,
+        <code>resultTitle</code>, <code>homeBinSubtitle</code>, <code>vanishedNotice</code> (+ is/are),
+        <code>restoreOutcome</code>, <code>homeAllMediaCaption</code> and <code>binOtherItems</code>
+        through it.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/common/Copy.kt:183</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">16</div>
+      <div>
+        <h3>Don't say “0 items” before the count loads</h3>
+        <p class="feel">The Bin row asserts an empty trash for the whole of the launch reconcile pass —
+        on the one row the recoverability promise rests on.</p>
+        <p class="fix">Make <code>binCount</code> nullable and let <code>SwipeyRow</code>'s existing
+        null-<code>trailing</code> handling omit it, and give the row a subtitle that restates rules 1
+        and 7 exactly where you decide whether to look.</p>
+        <pre class="copy">BIN_SHORT_NOTE = "In your phone's trash · nothing here is deleted"</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/SwipeyApp.kt:59 · HomeScreen.kt:540</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">17</div>
+      <div>
+        <h3>Rescue the deck's message screens from clipping</h3>
+        <p class="feel">In landscape or at large text, the buttons clip — and this is the one screen
+        where that's unrecoverable, since the file's own comment says the Undo here is the
+        <em>only</em> way back to the session's final decision.</p>
+        <p class="fix"><code>DeckMessage</code> centres in a fixed <code>Column</code> with no
+        <code>verticalScroll</code>, and the manifest declares no <code>screenOrientation</code>. Scroll
+        the column and centre by arrangement, exactly as <code>PermissionGate.Message</code> already
+        does.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/deck/DeckScreen.kt:447</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">18</div>
+      <div>
+        <h3>Show what you're asking people to judge</h3>
+        <p class="feel">The deck withholds date and size — the two facts that decide most cards — even
+        though <code>MediaItem</code> already carries both and <code>formatBytes</code> exists.</p>
+        <p class="fix">Add a second chrome line at <code>typography.label</code>/<code>textSecondary</code>.
+        Prefer <code>DATE_TAKEN</code> with a <code>DATE_ADDED</code> fallback, or label it honestly:
+        <code>DATE_ADDED</code> is when the file landed on <em>this phone</em>, which for anything
+        restored or transferred is years off. Deliberately a bare noun phrase — it describes the file,
+        never bytes that binning would free.</p>
+        <pre class="copy">"14 Mar 2023 · 12.4 MB"</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/deck/DeckScreen.kt:311 · domain/MediaItem.kt:12</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">19</div>
+      <div>
+        <h3>Restore video position, and label videos as videos</h3>
+        <p class="feel">A notification at 1:40 of a three-minute clip returns you to 0:00 with no seek
+        bar and no way back. And videos are indistinguishable from photos in both the Review and Bin
+        grids, where a video's frame-zero thumbnail is often black.</p>
+        <p class="fix">Capture <code>currentPosition</code> in <code>onStopOrDispose</code> and
+        <code>seekTo</code> in the builder — but store positions in an <strong>id-keyed map</strong>,
+        not <code>rememberSaveable(item.id)</code>, or the next clip seeks to the previous clip's
+        timestamp.</p>
+        <p class="fix">For the grids, draw a scrim <code>SwipeyIcons.Play</code> badge (copy
+        <code>DurationBadge</code>) and prefix the caption <code>"0:42 · 412 MB"</code> using the
+        existing <code>formatDuration</code> — move it beside <code>formatBytes</code>, don't write a
+        second one. Fix both grids or they stop matching.</p>
+        <div class="meta"><span class="eff S">S badges</span><span class="eff">M resume</span><span class="files">VideoCard.kt:93 · ReviewScreen.kt:220 · BinScreen.kt:285</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">20</div>
+      <div>
+        <h3>Give the deck's blank loading screen a sentence</h3>
+        <p class="feel"><code>load()</code> reads the entire gallery before showing anything; meanwhile
+        the screen is a 2dp rule tucked under the status bar.</p>
+        <p class="fix">Home already keeps its header and hero around its own spinner. The deck should do
+        the same.</p>
+        <pre class="copy">DECK_LOADING = "Reading your photos…"</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/deck/DeckScreen.kt:133</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">21</div>
+      <div>
+        <h3>Consume the sort chooser on pick</h3>
+        <p class="feel">Back from the deck lands on the sort list, which now reads as “pick a sort”
+        again.</p>
+        <p class="fix">One line: <code>popUpTo(Routes.SORT) { inclusive = true }</code>. Skip the
+        proposed Close button — no screen in this app has back chrome, and adding it here alone would be
+        inconsistent.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/SwipeyApp.kt:136</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">22</div>
+      <div>
+        <h3>Fix the light-theme deck's invisible system bars</h3>
+        <p class="feel">In light theme the OS draws a near-black clock, battery and gesture pill on top
+        of the deck's black chrome gradients, over a possibly-dark photo — so you lose the clock and the
+        gesture indicator for the longest single-screen stretch in the app.</p>
+        <p class="fix">A <code>DisposableEffect</code> in <code>DeckScreen</code> forcing
+        <code>isAppearanceLight*Bars = false</code> and restoring on exit fixes it; it's a no-op in dark
+        theme.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/deck/DeckScreen.kt · MainActivity.kt:36</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIER 3 ============ -->
+  <section class="tier" data-tier="3">
+    <h2>Tier 3 · Polish</h2>
+    <p class="tsub">Cheap, real, not urgent.</p>
+
+    <div class="item" data-eff="M">
+      <div class="rank">—</div>
+      <div>
+        <h3>Label the disclosure notes</h3>
+        <p class="feel">Four identical grey paragraphs with no entry point. A worried user hunting “is
+        this gone for good?” has to read all of it, so they read none of it.</p>
+        <p class="fix">Change <code>notes</code> to <code>List&lt;Pair&lt;String, String&gt;&gt;</code>
+        and add labels at <code>typography.label</code>/<code>textPrimary</code>. Not one required
+        sentence changes.</p>
+        <pre class="copy">"About your storage"
+"It's your phone's trash, not Swipey's"
+"Nothing is deleted for good"
+"Android asks again"
+"You'll confirm more than once"</pre>
+        <div class="meta"><span class="eff">M</span><span class="files">ui/common/DisclosureSheet.kt:126</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">—</div>
+      <div>
+        <h3>Two-line empty Bin</h3>
+        <p class="feel"><code>"Nothing here"</code> alone, on the screen whose whole job is proving
+        recoverability.</p>
+        <pre class="copy">BIN_EMPTY_BODY = "Items you bin go to your phone's trash and
+show up here until that trash is emptied — in Swipey, Google
+Photos or Files. Swipey can't delete anything permanently."</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/bin/BinScreen.kt:177</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">—</div>
+      <div>
+        <h3>Bin header count and size</h3>
+        <p class="fix"><code>fun binHeader(count: Int, size: String) = "$count items · $size in the
+        trash"</code>, with <code>TRASH_SIZE_NOTE</code> promoted inline beside it so the figure and its
+        caveat never appear apart. Keep the header from growing to four stacked lines.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/bin/BinScreen.kt:108</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">—</div>
+      <div>
+        <h3>“Check again” on an empty gallery</h3>
+        <p class="fix">Pass <code>onRetry</code> on the empty branch too — “Try again” implies failure
+        and nothing failed. Today the only refresh is the accidental one you get by visiting Bin and
+        pressing Back.</p>
+        <pre class="copy">HOME_EMPTY_ACTION = "Check again"</pre>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/home/HomeScreen.kt:177</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">—</div>
+      <div>
+        <h3>Stop the controls strobing</h3>
+        <p class="feel"><code>decisionsEnabled = !committing</code> snaps three glyphs to 38% and back on
+        every card — a thousand uncushioned steps a session, which <code>SwipeyDisabledAlpha</code>'s own
+        doc says it exists to prevent.</p>
+        <p class="fix">Add an <code>inert</code> parameter to <code>SwipeyIconButton</code> that removes
+        the click without touching alpha or ring, strictly for sub-perceptual guard windows.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ui/design/Components.kt:350 · DeckScreen.kt:233</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">—</div>
+      <div>
+        <h3>Accessibility package — ship together</h3>
+        <ul>
+          <li>A <code>liveRegion</code> on the deck counter so a decision produces <em>any</em>
+          confirmation: <code>"Item 48 of 312. 12 marked."</code>, ideally prefixed “Binned.”/“Kept.”
+          Set the flag explicitly in <code>swipe()</code>/<code>undo()</code>, not derived, or an undo
+          re-announces itself.</li>
+          <li><code>Copy.mediaLabel(...)</code> replacing filename-as-description at all <strong>four</strong>
+          sites — <code>DeckScreen.kt:496</code>, <code>ReviewScreen.kt:222</code>,
+          <code>BinScreen.kt:308</code>, and <code>VideoCard</code>'s root, which currently announces
+          nothing but “Play”.</li>
+          <li><code>toggleable(role = Role.Checkbox)</code> on <code>BinTile</code> so a screen-reader
+          user can review a 12-item selection before a system dialog.</li>
+        </ul>
+        <div class="meta"><span class="eff">M</span><span class="files">four sites across deck, review, bin</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="S">
+      <div class="rank">—</div>
+      <div>
+        <h3>Adaptive grids</h3>
+        <p class="fix"><code>GridCells.Adaptive(minSize = 104.dp)</code> in Review and Bin — unchanged at
+        360dp, 6 columns in landscape, 8–10 on a tablet, on two screens whose entire job is scanning.
+        Treat the Home <code>chunked(2)</code> half as optional.</p>
+        <div class="meta"><span class="eff S">S</span><span class="files">ReviewScreen.kt · BinScreen.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">—</div>
+      <div>
+        <h3>Reduced motion</h3>
+        <p class="fix">A <code>LocalReducedMotion</code> in <code>Tokens.kt</code> from
+        <code>ANIMATOR_DURATION_SCALE</code> (wrap the read in try/catch), zeroing the 12° tilt and
+        replacing the fly-off with an in-place alpha fade on the same beat. Leave
+        <code>binDrain</code>/<code>keepGlow</code> — they're the only non-verbal statement of which way
+        a swipe went.</p>
+        <div class="meta"><span class="eff">M</span><span class="files">ui/design/Tokens.kt · Motion.kt</span></div>
+      </div>
+    </div>
+
+    <div class="item" data-eff="M">
+      <div class="rank">—</div>
+      <div>
+        <h3>Lower-value — judge separately</h3>
+        <ul>
+          <li><strong>Undo for a mis-tapped unmark in Review</strong> — needs a new
+          <code>SwipeSession.remark</code>; the item isn't lost, just silently uncounted.</li>
+          <li><strong>Full-size preview on long-press</strong> in Review and Bin — long-press is
+          undiscoverable, and every item was already seen full-screen in the deck.</li>
+          <li><strong>A resume row on Home</strong> — belongs <em>below</em> the hero, and must not imply
+          marks were preserved. They aren't.</li>
+          <li><strong>Per-album sort</strong> — All media + Largest first already covers most of it; the
+          residual value is album-scoped, e.g. Screenshots.</li>
+          <li><strong>Pinch-zoom on the deck</strong> — real need, but implement as a
+          <code>pointerInput</code> on the photo Box that consumes drags while zoomed; the parent drag
+          detector cannot be swapped mid-gesture.</li>
+        </ul>
+        <div class="meta"><span class="eff">varies</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PACKAGES ============ -->
+  <section class="pkg">
+    <h2>Ship-together packages</h2>
+    <p class="tsub">Four groups where the pieces are worth more together than apart.</p>
+    <div class="pkgrid">
+      <div class="pkgcard">
+        <b>Deck feel — do this first</b>
+        <p>Items 1, 2, 8, plus the control-strobe fix. Individually they read as small; together they
+        turn the deck from twitchy to solid.</p>
+      </div>
+      <div class="pkgcard">
+        <b>Honest disclosure, better timed</b>
+        <p>Item 3, plus item 12's rewording, item 16's Bin subtitle, and the disclosure labels. Every one
+        makes a required claim <em>more</em> visible; none softens anything. One pass through
+        <code>Copy.kt</code> and <code>DisclosureSheet.kt</code>.</p>
+      </div>
+      <div class="pkgcard">
+        <b>Recoverability at scale</b>
+        <p>Items 11, 12, 13, plus the Bin header and empty state. Select-all is what makes the
+        multi-confirmation warning necessary; the restore-outcome split is what makes a failed batch
+        actionable.</p>
+      </div>
+      <div class="pkgcard">
+        <b>Kept items are visible again</b>
+        <p>Items 9 and 14. Fourteen supplies the <code>remainingCount</code> that 9's Home-side story
+        depends on, and they share the <code>albumDone</code> string.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LEAVE ALONE ============ -->
+  <section class="solid">
+    <h2>Already solid — leave alone</h2>
+    <p><strong>The custom design system holds.</strong> Zero <code>material3</code> imports in
+    <code>ui/</code>, and every proposal above builds out of <code>SwipeyButton</code>,
+    <code>SwipeyChip</code>, <code>SwipeyRow</code>, <code>SwipeyText</code>,
+    <code>SwipeyProgressBar</code> and the existing tokens.</p>
+    <p><strong>The disclosure corpus is correct and verbatim.</strong> The problem is timing and
+    hierarchy, never content — nothing in this list shortens or hides a required sentence.</p>
+    <p><strong>The safety architecture is genuinely good:</strong> the <code>verifyAndResolve()</code>
+    reconcile pass, the per-item <code>IS_TRASHED</code> re-check behind <code>RecoveryReport</code>, the
+    500-URI chunking, the <code>DeleteRecordAndReview</code> resolution that correctly re-enables a
+    restored item for swiping, and the total absence of any permanent-delete path.</p>
+    <p><code>DeckScreen</code>'s Back-with-marks discard dialog is the right pattern — Review just needs
+    to copy it. Home's hero is working; don't stack new rows above it. The deck's decision to wrap its
+    own chrome in <code>SwipeyDarkColors</code> is right; only the system's half of that surface was
+    missed. And <code>DeckMessage</code>'s deliberate refusal to auto-navigate on the nothing-marked
+    branch is the correct instinct — item 6 just extends it to the case that matters more.</p>
+  </section>
+
+  <footer>
+    Six parallel audits, each followed by an adversarial verifier whose job was to kill findings that
+    were already implemented, wrongly cited, or that would have broken the app's honest-disclosure
+    rules. 51 findings survived; 6 were killed. Effort estimates are S ≈ under an hour, M ≈ half a day,
+    L ≈ a day or more.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var state = { tier: 'all', eff: new Set() };
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('button.f'));
+    var items = Array.prototype.slice.call(document.querySelectorAll('.item'));
+    var tiers = Array.prototype.slice.call(document.querySelectorAll('.tier'));
+    var count = document.getElementById('count');
+
+    function apply() {
+      var shown = 0;
+      items.forEach(function (item) {
+        var section = item.closest('.tier');
+        var tierOk = state.tier === 'all' || section.dataset.tier === state.tier;
+        var eff = item.dataset.eff || '';
+        var effOk = state.eff.size === 0 || state.eff.has(eff);
+        var visible = tierOk && effOk;
+        item.hidden = !visible;
+        if (visible) shown++;
+      });
+      tiers.forEach(function (section) {
+        var any = Array.prototype.some.call(section.querySelectorAll('.item'), function (i) { return !i.hidden; });
+        section.hidden = !any;
+      });
+      count.textContent = shown + (shown === 1 ? ' item' : ' items');
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.dataset.tier) {
+          state.tier = btn.dataset.tier;
+          buttons.forEach(function (b) {
+            if (b.dataset.tier) b.setAttribute('aria-pressed', String(b === btn));
+          });
+        } else {
+          var key = btn.dataset.eff;
+          if (state.eff.has(key)) { state.eff.delete(key); } else { state.eff.add(key); }
+          btn.setAttribute('aria-pressed', String(state.eff.has(key)));
+        }
+        apply();
+      });
+    });
+
+    apply();
+  })();
+</script>

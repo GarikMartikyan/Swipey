@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The deck's video surface.
+
+  This layout exists for exactly one attribute. PlayerView defaults to
+  surface_type="surface_view", and a SurfaceView is composited by the system in its own
+  hardware layer rather than drawn inside the Compose draw pass — so the rounded clip the
+  deck's card applies has no effect on it, and a video would play with square corners
+  inside a card with rounded ones while every photograph rounded correctly.
+
+  A TextureView draws into the view hierarchy like anything else, so the clip lands. It
+  costs slightly more memory and power than a SurfaceView and cannot carry DRM-secure
+  output — neither matters for local gallery media, and there is no other way to set the
+  surface type: it is XML-only, with no runtime setter to call from the AndroidView factory.
+-->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:surface_type="texture_view"
+    app:use_controller="false" />

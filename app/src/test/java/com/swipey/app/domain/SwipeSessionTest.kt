@@ -140,4 +140,54 @@ class SwipeSessionTest {
         assertEquals(1L, undone?.item?.id)
         assertEquals(0, s.markedCount)
     }
+
+    // --- peek: what the deck draws underneath the card being swiped ---
+
+    @Test fun peekLooksAheadOfCurrent() {
+        val s = session()
+        assertEquals(1L, s.peek(0)?.id)
+        assertEquals(2L, s.peek(1)?.id)
+        assertEquals(3L, s.peek(2)?.id)
+    }
+
+    @Test fun peekTracksPositionAsTheDeckAdvances() {
+        val s = session()
+        s.swipeRight()
+        assertEquals(2L, s.current?.id)
+        assertEquals(3L, s.peek(1)?.id)
+    }
+
+    @Test fun peekIsNullOnTheLastCard() {
+        val s = session()
+        s.swipeRight()
+        s.swipeRight()
+        assertEquals(3L, s.current?.id)
+        // Nothing behind the last photograph, so the deck draws no under-card.
+        assertNull(s.peek(1))
+    }
+
+    @Test fun peekIsNullPastBothEndsRatherThanThrowing() {
+        val s = session()
+        assertNull(s.peek(3))
+        assertNull(s.peek(99))
+        // Negative offsets are as out of bounds as any other: peek looks forward only.
+        assertNull(s.peek(-1))
+    }
+
+    @Test fun peekIsNullOnAnExhaustedDeck() {
+        val s = session(1)
+        s.swipeLeft()
+        assertTrue(s.isExhausted)
+        assertNull(s.peek(0))
+        assertNull(s.peek(1))
+    }
+
+    @Test fun peekFollowsAnUndoBackwards() {
+        val s = session()
+        s.swipeRight()
+        s.swipeRight()
+        s.undo()
+        assertEquals(2L, s.current?.id)
+        assertEquals(3L, s.peek(1)?.id)
+    }
 }

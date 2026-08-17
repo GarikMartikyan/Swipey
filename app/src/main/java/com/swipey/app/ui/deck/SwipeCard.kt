@@ -9,41 +9,42 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.swipey.app.ui.design.SwipeyDarkColors
+import com.swipey.app.ui.design.SwipeyIcon
+import com.swipey.app.ui.design.SwipeyIcons
 import com.swipey.app.ui.design.SwipeyMotion
+import com.swipey.app.ui.design.SwipeyRadius
 import com.swipey.app.ui.design.SwipeySpacing
 import com.swipey.app.ui.design.SwipeyText
 import com.swipey.app.ui.design.SwipeyTheme
@@ -58,24 +59,64 @@ private const val CommitFraction = 0.3f
 private const val FlingVelocity = 1500f
 
 /** The fly-off. Deliberately a short tween rather than a spring: an exit should be over. */
-private const val ExitMillis = 220
-
-/** Degrees of tilt at full drag. Enough to feel like paper, not enough to read as a trick. */
-private const val MaxTiltDegrees = 12f
-
-/** How far in from the edge the keep glow reaches, as a fraction of screen width. */
-private const val GlowReach = 0.42f
-
-/** The keep glow's opacity at full drag. */
-private const val GlowAlpha = 0.5f
+private const val ExitMillis = 180
 
 /**
- * How dark the photograph goes at a full leftward drag, on top of losing its colour.
+ * How much the card swells while a thumb is on it.
  *
- * Enough to read as the picture withdrawing; not so much that the user can no longer see
- * what they are about to bin, which would defeat the entire screen.
+ * The ceiling here is arithmetic, not taste: the card grows about its own centre, so it
+ * gains `height * LiftScale / 2` at the top and the same at the bottom, and anything past
+ * [CardInset] pushes its rounded corners off the screen — clipping the very edge the lift
+ * exists to move. On this app's target device the card is roughly 660dp tall inside the
+ * safe area, so 2% costs 6.6dp against a 12dp gutter, with room to spare on a taller
+ * tablet card.
+ *
+ * Reported by the gesture detector's drag start, which fires once the touch clears the
+ * system's slop threshold — a few dp of movement, not the instant of contact. Close enough
+ * to read as "the app felt that", but it is a drag cue, not a press cue, and the KDoc used
+ * to overclaim it.
  */
-private const val BinDimAlpha = 0.4f
+private const val LiftScale = 0.02f
+
+/** The decision glyph's badge. Large enough to read past a thumb, small enough to see around. */
+private val GlyphBadgeSize = 96.dp
+
+/** The glyph inside the badge. */
+private val GlyphIconSize = 40.dp
+
+/**
+ * The badge's ground opacity.
+ *
+ * High, because the ground's job is to guarantee the glyph on top of it, and it has to do
+ * that over a photograph chosen by someone else — a white beach, a snow field, a flash-lit
+ * wall. At 0.55 the disc borrowed enough of a bright picture to take the glyph under the
+ * contrast floor; at 0.85 the photograph still reads through it as texture but no longer
+ * as luminance.
+ */
+private const val GlyphGroundAlpha = 0.85f
+
+/** The badge's scale at zero drag; it reaches 1f at the commit point. */
+private const val GlyphMinScale = 0.7f
+
+/**
+ * The next photograph's scale at rest; it reaches 1f at the commit point.
+ *
+ * Sits behind the card being swiped and grows to meet it, so the deck reads as a stack
+ * rather than as a single picture over an empty canvas. 7% is enough that the inset border
+ * of canvas around it registers as depth on the strip the top card has vacated, and little
+ * enough that the photograph has effectively finished arriving by the time it is uncovered.
+ */
+private const val UnderScale = 0.93f
+
+/**
+ * The gutter between the card and the edge of the safe area.
+ *
+ * Small, because the photograph is the point and every dp given to the gutter is taken
+ * from the thing being judged. It exists for two reasons: so the rounded corners have
+ * canvas to be rounded *against*, and so [LiftScale] has somewhere to grow into. The
+ * second is a hard constraint — see that constant.
+ */
+private val CardInset = SwipeySpacing.md
 
 /**
  * The top card, and the gesture that decides it.
@@ -88,44 +129,46 @@ private const val BinDimAlpha = 0.4f
  * caller can disable any other way of recording a decision (e.g. buttons) until it
  * resolves.
  *
- * ### What the user sees, and why the two directions don't match
- * The decisions get deliberately asymmetric feedback, because they are not mirror images
- * of one another.
+ * ### What the user sees: lift, and a glyph
+ * The card never changes angle. Nothing rotates on drag and nothing rotates on exit — the
+ * photograph stays square with the screen from the moment a thumb lands to the moment it
+ * leaves. Two things carry the gesture instead:
  *
- * **Keep** warms the right edge of the *screen* to [SwipeyDarkColors.keep] as the drag
- * progresses — an edge glow rather than a wash over the photograph, since the photo is
- * the thing being judged and tinting it changes the very thing the user is looking at in
- * order to decide.
+ * **Lift.** On touch the card swells by [LiftScale] and settles back on release. It is
+ * keyed to contact rather than to displacement, so it answers "the app felt that" before
+ * the user has moved far enough to mean anything. It reads because the card has edges: it
+ * is inset from the safe area and rounded to [SwipeyRadius.deck], so growing it moves a
+ * visible boundary against the canvas rather than scaling a picture that already fills
+ * every pixel.
  *
- * **Bin** has no colour at all, and that is the palette's central claim rather than an
- * omission. Instead the photograph itself desaturates and dims in step with the drag, so
- * that at the commit point it is fully grey and [BinDimAlpha] darker. The picture
- * visibly leaving is a truer account of what the swipe does than any tint could be — the
- * item goes to the system trash and comes back from the Bin — and it is the one form of
- * feedback that cannot be misread as a warning.
+ * **A glyph.** One badge in the centre of the screen — a bin or a check — fading and
+ * growing from [GlyphMinScale] to full size as the drag approaches the commit point. It
+ * replaces the earlier treatment, in which the photograph desaturated toward the bin and
+ * the right edge warmed toward keep. That treatment argued its own case well and it is
+ * worth naming what was traded for this one: the picture no longer visibly drains, so the
+ * feedback is now a symbol *about* the decision rather than a preview *of* it. What it
+ * buys is legibility over any photograph, and a single unambiguous statement of direction
+ * on a card that no longer tilts to tell you.
  *
- * The glow and the BIN/KEEP marks are siblings of the moving card, not children of it:
- * they stay put while the photograph travels, which is what makes them read as edges of
- * the *screen* rather than as decoration on the card. The desaturation is the single
- * exception — it belongs to the picture, so it travels with it.
- *
- * A video dims but does not desaturate: ExoPlayer draws into a `SurfaceView` on its own
- * composited layer, which a `ColorMatrix` applied inside the Compose canvas cannot reach.
- * The scrim, drawn over the top, still lands, so the direction of travel still reads.
+ * The badge is a sibling of the moving card, not a child of it: it stays put while the
+ * photograph travels, which is what makes it read as belonging to the screen rather than
+ * as decoration on the picture. It also means it works identically over video, which the
+ * old desaturation could not — ExoPlayer draws into a `SurfaceView` on its own composited
+ * layer that a `ColorMatrix` inside the Compose canvas cannot reach.
  *
  * ### Why nothing here recomposes while a finger is down
- * Every read of the drag offset lives inside a `graphicsLayer`, `drawBehind` or
- * `drawWithCache` lambda, which the compose runtime defers to the layout/draw phase. A
- * frame of dragging therefore redraws, but does not recompose — which matters on the one
- * screen a user holds their thumb on for an entire session. The `Paint` and `ColorMatrix`
- * the bin treatment needs are built once per size in the cache block for the same reason:
- * a drag allocates nothing.
+ * Every read of the drag offset lives inside a `graphicsLayer` lambda, which the compose
+ * runtime defers to the layout/draw phase. A frame of dragging therefore redraws, but does
+ * not recompose — which matters on the one screen a user holds their thumb on for an
+ * entire session. A drag allocates nothing.
  */
 @Composable
 fun SwipeCard(
     itemId: Long,
     onSwiped: (itemId: Long, keep: Boolean) -> Unit,
     onCommittingChanged: (Boolean) -> Unit = {},
+    commitRequest: Boolean? = null,
+    under: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val screenWidthPx = with(LocalDensity.current) {
@@ -135,11 +178,22 @@ fun SwipeCard(
     val offsetX = remember(itemId) { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = rememberSwipeyHaptics()
-    var velocity by remember(itemId) { mutableFloatStateOf(0f) }
 
-    // 0f..1f as the incoming card settles into place. Reset per item, so each new
-    // photograph rises in rather than appearing fully formed where the last one was.
-    val entry = remember(itemId) { Animatable(0f) }
+    // The real thing, not an estimate. The previous implementation derived fling speed as
+    // `dragAmount * 60f`, which bakes in an assumption of 60fps: on a 120Hz display each
+    // frame's delta is half as large, so the same flick reported half the velocity and the
+    // fling gate below was effectively doubled — roughly half of all quick flicks refused
+    // to commit. It also sampled only the final frame, so a flick that eased off at the
+    // end read as nearly stationary. VelocityTracker integrates over a window of real
+    // timestamps and is frame-rate independent.
+    val tracker = remember(itemId) { VelocityTracker() }
+
+    // 0f at rest, 1f while a thumb is down. Keyed on itemId so it cannot outlive the card
+    // it belongs to: on a drag commit the finger has already lifted (onDragEnd runs before
+    // the fly-off finishes and the deck advances), so re-keying costs nothing there — and
+    // it closes the one path where a gesture cancelled by the pointerInput block being
+    // torn down mid-drag could strand the lift at 1f, leaving every later card oversized.
+    val lift = remember(itemId) { Animatable(0f) }
 
     // Whether the drag is currently past the commit point. Tracked only to fire the
     // threshold haptic once per crossing rather than on every frame beyond it.
@@ -152,11 +206,15 @@ fun SwipeCard(
     var pendingKeep by remember(itemId) { mutableStateOf<Boolean?>(null) }
     val fired = remember(itemId) { booleanArrayOf(false) }
 
-    LaunchedEffect(itemId) {
-        offsetX.snapTo(0f)
-        entry.snapTo(0f)
-        entry.animateTo(1f, SwipeyMotion.cardSettle())
-    }
+    // No entry animation, deliberately. The card used to fade and rise in on every new
+    // item, because otherwise a photograph appeared fully formed on bare canvas the
+    // instant the last one left. The under-card does that job now and does it better —
+    // by the time an item becomes current it has already been on screen, growing into
+    // place, for the whole of the previous swipe. Re-animating it here would take a
+    // picture that is already at full size and full opacity and flash it back to nothing.
+    //
+    // There is no snapTo(0f) either: `offsetX` is remembered against itemId, so a re-key
+    // already produces a fresh Animatable sitting at zero.
 
     // Read in composition, deliberately: this is what subscribes the composable to
     // `pendingKeep`, and therefore what guarantees the SideEffect below re-runs — and
@@ -165,12 +223,30 @@ fun SwipeCard(
     val committing = pendingKeep != null
     SideEffect { onCommittingChanged(committing) }
 
+    // A decision made somewhere other than the card — the Bin and Keep buttons — enters
+    // here and then takes exactly the path a drag takes. Routing them through the same
+    // fly-off is not decoration: without it a tap swapped the photograph on the next frame
+    // with no motion at all, and the under-card, sitting at [UnderScale] because no drag
+    // had grown it, jumped to full size in the same frame. Two different ways to record
+    // the same decision should not look like two different apps.
+    //
+    // Guarded on `pendingKeep == null` so a request cannot overwrite a drag already
+    // committing, and keyed on itemId so a stale request cannot follow the deck onto the
+    // next card — the caller clears it in `onSwiped`, which lands in the same state batch
+    // as the id change.
+    LaunchedEffect(itemId, commitRequest) {
+        if (commitRequest != null && pendingKeep == null) pendingKeep = commitRequest
+    }
+
     // Runs the fly-off animation and then reports the decision. Keyed on
     // (itemId, pendingKeep): if the card is re-keyed for the next item before this
     // finishes, this coroutine is cancelled rather than surviving to call onSwiped
     // against the new current item (fix round 1, Critical 2).
     LaunchedEffect(itemId, pendingKeep) {
         val keep = pendingKeep ?: return@LaunchedEffect
+        // Whatever raised the lift — a thumb, or nothing at all on a button commit — the
+        // card is leaving, so it goes back down alongside the fly-off rather than after it.
+        launch { lift.animateTo(0f, SwipeyMotion.press()) }
         offsetX.animateTo(
             if (keep) screenWidthPx * 1.5f else -screenWidthPx * 1.5f,
             tween(ExitMillis),
@@ -216,14 +292,23 @@ fun SwipeCard(
             // screen at all times, including the strip the card has already left.
             .pointerInput(itemId) {
                 detectHorizontalDragGestures(
+                    // The lift answers contact, so it starts here rather than on the
+                    // first movement: a thumb resting on the picture has already been
+                    // acknowledged before it has travelled far enough to mean anything.
+                    onDragStart = {
+                        tracker.resetTracking()
+                        scope.launch { lift.animateTo(1f, SwipeyMotion.press()) }
+                    },
                     onDragEnd = {
+                        scope.launch { lift.animateTo(0f, SwipeyMotion.press()) }
                         // A decision is already committed and animating off-screen;
                         // ignore anything further so it can't be re-committed with a
                         // different value while the LaunchedEffect above is in flight.
                         if (pendingKeep != null) {
-                            velocity = 0f
+                            tracker.resetTracking()
                             return@detectHorizontalDragGestures
                         }
+                        val velocity = tracker.calculateVelocity().x
                         val overThreshold = abs(offsetX.value) > threshold
                         val committed = overThreshold || abs(velocity) > FlingVelocity
                         if (committed) {
@@ -238,13 +323,14 @@ fun SwipeCard(
                             pastThreshold = false
                             scope.launch { offsetX.animateTo(0f, SwipeyMotion.cardSettle()) }
                         }
-                        velocity = 0f
+                        tracker.resetTracking()
                     },
                     // Without this a gesture the system takes away (a second pointer, a
                     // navigation drag from the edge) leaves the card stranded off-centre
                     // with no decision made and no way back but another drag.
                     onDragCancel = {
-                        velocity = 0f
+                        tracker.resetTracking()
+                        scope.launch { lift.animateTo(0f, SwipeyMotion.press()) }
                         if (pendingKeep == null) {
                             pastThreshold = false
                             scope.launch { offsetX.animateTo(0f, SwipeyMotion.cardSettle()) }
@@ -253,7 +339,10 @@ fun SwipeCard(
                     onHorizontalDrag = { change, dragAmount ->
                         change.consume()
                         if (pendingKeep == null) {
-                            velocity = dragAmount * 60f
+                            // Position and timestamp straight off the pointer event. The
+                            // node is full-screen and stationary, so `position` is already
+                            // in the coordinate space the velocity is wanted in.
+                            tracker.addPosition(change.uptimeMillis, change.position)
                             val target = offsetX.value + dragAmount
                             // One tick as the drag crosses the commit point, so the user
                             // can feel where the decision lands without watching for it.
@@ -268,128 +357,140 @@ fun SwipeCard(
                 )
             },
     ) {
-        // The photograph itself, and the only thing that moves.
+        // The next photograph, beneath everything and never moving sideways: only the top
+        // card travels. It grows toward full size as the drag approaches the commit point,
+        // so by the moment it is uncovered it has already arrived. Null on the last card.
+        if (under != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val t = abs(progress())
+                        val s = UnderScale + (1f - UnderScale) * t
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .cardSurface(),
+            ) {
+                under()
+            }
+        }
+
+        // The photograph itself, and the only thing that moves. No rotationZ: the card is
+        // square with the screen at every point in the gesture.
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
                     translationX = offsetX.value
-                    rotationZ = progress() * MaxTiltDegrees
-                    // Coerced because cardSettle() is underdamped and overshoots 1f;
-                    // scale is happy to overshoot, alpha is not.
-                    alpha = entry.value.coerceIn(0f, 1f)
-                    val rise = 0.98f + 0.02f * entry.value
-                    scaleX = rise
-                    scaleY = rise
+                    val s = 1f + LiftScale * lift.value
+                    scaleX = s
+                    scaleY = s
                 }
-                // Applied inside the layer above, so the drain travels with the
-                // photograph rather than staying put like the glow and the marks.
-                .binDrain { -progress() },
+                .cardSurface(),
         ) {
             content()
         }
 
-        // The keep glow, stationary, over the edge the card is heading toward. It has no
-        // counterpart on the left: binning is the drain above, and adding a second colour
-        // here is exactly what this palette refuses to do.
-        Box(Modifier.fillMaxSize().keepGlow { progress() })
-
-        // The two marks. Decorative by construction — the controls below the card carry
-        // the accessible names for both decisions, and a screen-reader user never sees
-        // a drag progress in the first place, so these are cleared from the tree rather
-        // than announced at alpha 0.
-        DecisionMark(
-            text = "BIN",
-            // textPrimary, not an accent. There is no bin colour to reach for, and
-            // inventing one at this call site would undo the point of the palette; the
-            // photograph draining behind the word is the signal, and the word only names
-            // it. Restrained on purpose — this is a label, not a verdict.
-            color = SwipeyDarkColors.textPrimary,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = SwipeySpacing.xl)
-                .graphicsLayer { alpha = (-progress()).coerceIn(0f, 1f) },
-        )
-        DecisionMark(
-            text = "KEEP",
-            color = SwipeyDarkColors.keep,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = SwipeySpacing.xl)
-                .graphicsLayer { alpha = progress().coerceIn(0f, 1f) },
+        // The decision glyph, stationary at the centre while the photograph travels under
+        // it. Decorative by construction — the controls below the card carry the
+        // accessible names for both decisions, and a screen-reader user never sees a drag
+        // progress in the first place, so this is cleared from the tree rather than
+        // announced at alpha 0.
+        DecisionGlyph(
+            modifier = Modifier.align(Alignment.Center),
+            progress = ::progress,
         )
     }
 }
 
 /**
- * Drains the content of colour and then of light, as [leaving] runs `0f..1f`.
+ * Turns a full-screen box into the deck's card: inset, rounded, and on its own ground.
  *
- * This is the whole of Swipey's bin feedback. At `1f` — the commit point — the picture is
- * fully grey and [BinDimAlpha] darker, which is what "on its way out" looks like in a
- * palette that has refused itself a colour to say it with.
+ * Applied identically to the travelling card and the one waiting underneath, from one
+ * place, because the two must be the same object at different depths — a stack whose cards
+ * had different corners would read as two unrelated things overlapping.
  *
- * [leaving] is a lambda rather than a value, and is read inside the draw lambda on
- * purpose: a frame of dragging redraws without recomposing. Values outside `0f..1f` are
- * coerced, so a caller can hand this a raw signed drag progress. The `Paint` and
- * `ColorMatrix` are built once per size rather than once per frame, so a drag allocates
- * nothing.
+ * The order matters. Insets and padding come first so the rounding is cut from the card's
+ * own bounds rather than the screen's; the clip follows; the ground goes last so it fills
+ * the rounded shape rather than a rectangle behind it. `safeDrawing` keeps the corners
+ * clear of the display cutout and the phone's own rounded corners, where a card rounded to
+ * 28dp against a screen rounded to something else reads as a mistake.
+ *
+ * The ground is the dark palette's surface in both themes, for the same reason the chrome
+ * is: what sits on this is a photograph, and `ContentScale.Fit` means the card shows
+ * through wherever the picture's aspect doesn't match the screen's. A light ground there
+ * would flare around a dark photograph.
  */
-private fun Modifier.binDrain(leaving: () -> Float): Modifier = drawWithCache {
-    val paint = Paint()
-    val matrix = ColorMatrix()
-    val bounds = Rect(Offset.Zero, size)
-    onDrawWithContent {
-        val p = leaving().coerceIn(0f, 1f)
-        if (p == 0f) {
-            // The overwhelmingly common frame, and the only one that costs nothing: no
-            // offscreen layer, no filter, no scrim.
-            drawContent()
-            return@onDrawWithContent
-        }
-        // Colour goes first and light second, so it reads as the picture draining rather
-        // than as a lamp being switched off.
-        matrix.setToSaturation(1f - p)
-        paint.colorFilter = ColorFilter.colorMatrix(matrix)
-        drawIntoCanvas { canvas ->
-            canvas.saveLayer(bounds, paint)
-            drawContent()
-            canvas.restore()
-        }
-        drawRect(Color.Black, alpha = p * BinDimAlpha)
-    }
-}
-
-/**
- * Warms the right edge to [SwipeyDarkColors.keep] as [arriving] runs `0f..1f`.
- *
- * The dark palette's accent in both themes: the ground under this is a photograph, not
- * the canvas, so the light palette's darker `#1D51D6` — tuned to be read as a glyph on
- * white — would sink into the picture rather than glow over it. Values at or below `0f`
- * draw nothing, so a caller can hand this a raw signed drag progress.
- */
-private fun Modifier.keepGlow(arriving: () -> Float): Modifier = drawBehind {
-    val p = arriving().coerceAtMost(1f)
-    if (p <= 0f) return@drawBehind
-    val reach = size.width * GlowReach
-    drawRect(
-        Brush.horizontalGradient(
-            listOf(Color.Transparent, SwipeyDarkColors.keep.copy(alpha = p * GlowAlpha)),
-            startX = size.width - reach,
-            endX = size.width,
-        ),
-    )
-}
-
-/** One of the two edge marks. Letter-spaced caps, so it reads as a label, not a shout. */
 @Composable
-private fun DecisionMark(text: String, color: Color, modifier: Modifier = Modifier) {
-    SwipeyText(
-        text = text,
-        modifier = modifier.clearAndSetSemantics { },
-        style = SwipeyTheme.typography.title.copy(letterSpacing = 4.sp),
-        color = color,
-        maxLines = 1,
-    )
+private fun Modifier.cardSurface(): Modifier = this
+    .windowInsetsPadding(WindowInsets.safeDrawing)
+    .padding(CardInset)
+    .clip(RoundedCornerShape(SwipeyRadius.deck))
+    .background(SwipeyDarkColors.surface)
+
+/**
+ * The one badge that says which way the card is going.
+ *
+ * Both states are always composed and cross-faded by alpha rather than swapped by an `if`:
+ * the drag reads [progress] inside a `graphicsLayer` lambda, so a frame of dragging
+ * redraws without recomposing, and a conditional here would put a recomposition on every
+ * crossing of zero — on the one screen a user holds their thumb on for a whole session.
+ *
+ * [progress] is signed: negative is bin, positive is keep. Exactly one badge has non-zero
+ * alpha at a time, so they can safely occupy the same space.
+ */
+@Composable
+private fun DecisionGlyph(progress: () -> Float, modifier: Modifier = Modifier) {
+    Box(modifier.clearAndSetSemantics { }) {
+        Badge(
+            icon = SwipeyIcons.Bin,
+            // No bin colour: the palette refuses itself one, and inventing an alarm red
+            // here would undo that. A neutral ground under a light glyph is the badge
+            // saying what is about to happen without editorialising about it.
+            ground = Color.Black,
+            tint = SwipeyDarkColors.textPrimary,
+            amount = { (-progress()).coerceIn(0f, 1f) },
+        )
+        Badge(
+            icon = SwipeyIcons.Check,
+            // The dark palette's keep in both themes: the ground under this is a
+            // photograph, not the canvas, and the light palette's darker #1D51D6 — tuned
+            // to be read as a glyph on white — sinks into a picture rather than sitting on
+            // top of it.
+            ground = SwipeyDarkColors.keep,
+            tint = SwipeyDarkColors.textPrimary,
+            amount = { progress().coerceIn(0f, 1f) },
+        )
+    }
+}
+
+/** One state of [DecisionGlyph]: a translucent disc, a glyph, and one alpha to drive both. */
+@Composable
+private fun Badge(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    ground: Color,
+    tint: Color,
+    amount: () -> Float,
+) {
+    Box(
+        Modifier
+            .size(GlyphBadgeSize)
+            .graphicsLayer {
+                val a = amount()
+                alpha = a
+                // Grows into place rather than merely appearing, so the badge reports how
+                // close the drag is to committing and not just which way it points.
+                val s = GlyphMinScale + (1f - GlyphMinScale) * a
+                scaleX = s
+                scaleY = s
+            }
+            .clip(CircleShape)
+            .background(ground.copy(alpha = GlyphGroundAlpha)),
+        contentAlignment = Alignment.Center,
+    ) {
+        SwipeyIcon(icon, contentDescription = null, tint = tint, size = GlyphIconSize)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -397,20 +498,21 @@ private fun DecisionMark(text: String, color: Color, modifier: Modifier = Modifi
 // ---------------------------------------------------------------------------
 
 /**
- * A stand-in for a photograph. Saturated on purpose: a muted one would make the bin
- * treatment look like it was doing nothing.
+ * A stand-in for a photograph. Busy on purpose: a flat one would let the badge's
+ * translucent ground look more legible than it is over a real picture.
  */
 private val PreviewPhoto = Brush.linearGradient(
     listOf(Color(0xFFE8703A), Color(0xFFD8B93C), Color(0xFF2E9E6B), Color(0xFF2B5FD9)),
 )
 
 /**
- * Both drag treatments, side by side, at the values the user actually sees.
+ * The drag treatment at the values the user actually sees.
  *
  * The deck is one of the few things in the app a `@Preview` cannot render — it needs a
- * MediaStore, a gesture and a running animation — so this renders the two *treatments*
- * against a stand-in image instead. It is the only place the asymmetry is visible at a
- * glance: one direction gains a colour, the other loses one.
+ * MediaStore, a gesture and a running animation — so this renders the *badge* against a
+ * stand-in image instead, at rest and at both commit points. The half-drag frame is the
+ * one worth looking at: it is where the badge has to be readable while still clearly not
+ * yet committed.
  *
  * Always the dark palette, since that is what the deck draws in over a photograph in both
  * themes.
@@ -426,48 +528,27 @@ private fun DragFeedbackPreview() {
                 .padding(SwipeySpacing.sm),
             horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm),
         ) {
-            DragFeedbackSample("bin · 1.0", Modifier.weight(1f), bin = 1f)
-            DragFeedbackSample("bin · 0.5", Modifier.weight(1f), bin = 0.5f)
-            DragFeedbackSample("at rest", Modifier.weight(1f))
-            DragFeedbackSample("keep · 1.0", Modifier.weight(1f), keep = 1f)
+            DragFeedbackSample("bin · 1.0", Modifier.weight(1f), -1f)
+            DragFeedbackSample("bin · 0.5", Modifier.weight(1f), -0.5f)
+            DragFeedbackSample("at rest", Modifier.weight(1f), 0f)
+            DragFeedbackSample("keep · 1.0", Modifier.weight(1f), 1f)
         }
     }
 }
 
 /**
- * One frozen frame of a drag, built from the same modifiers [SwipeCard] uses — so this
+ * One frozen frame of a drag, built from the same composable [SwipeCard] uses — so this
  * cannot drift away from the real thing without failing to compile.
  */
 @Composable
-private fun DragFeedbackSample(
-    label: String,
-    modifier: Modifier = Modifier,
-    bin: Float = 0f,
-    keep: Float = 0f,
-) {
+private fun DragFeedbackSample(label: String, modifier: Modifier = Modifier, progress: Float = 0f) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            // The image goes *inside* the drain rather than behind it: `binDrain` filters
-            // the content it wraps, and a `background` modifier sits outside that.
-            Box(Modifier.fillMaxSize().binDrain { bin }) {
-                Box(Modifier.fillMaxSize().background(PreviewPhoto))
-            }
-            // A sibling above the picture, exactly as in the card.
-            Box(Modifier.fillMaxSize().keepGlow { keep })
-            if (bin > 0f) {
-                DecisionMark(
-                    text = "BIN",
-                    color = SwipeyDarkColors.textPrimary,
-                    modifier = Modifier.align(Alignment.Center).graphicsLayer { alpha = bin },
-                )
-            }
-            if (keep > 0f) {
-                DecisionMark(
-                    text = "KEEP",
-                    color = SwipeyDarkColors.keep,
-                    modifier = Modifier.align(Alignment.Center).graphicsLayer { alpha = keep },
-                )
-            }
+            Box(Modifier.fillMaxSize().background(PreviewPhoto))
+            DecisionGlyph(
+                progress = { progress },
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
         SwipeyText(
             label,

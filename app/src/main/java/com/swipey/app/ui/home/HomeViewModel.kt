@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.swipey.app.data.HomePreferences
 import com.swipey.app.data.MediaRepository
-import com.swipey.app.data.db.SwipeyDatabase
 import com.swipey.app.domain.Album
 import com.swipey.app.domain.MediaItem
 import com.swipey.app.domain.mostRecent
@@ -23,13 +22,13 @@ import kotlinx.coroutines.withContext
  * Everything Home draws, resolved from one pass over the gallery.
  *
  * @property newest the most recent item on the device — the hero's thumbnail.
- * @property totalCount every image and video, which is what "All media" means. Not
- *   filtered by what has already been kept: the caption says "All media", and a count that
- *   silently shrank as the user worked would be describing something else.
+ * @property totalCount every image and video, which is what "All media" means — and now
+ *   also exactly what the deck will queue, since the deck no longer withholds anything the
+ *   user has already swiped.
  * @property shuffleSeed the seed [shuffleFirst] was resolved with, and the seed the deck
  *   must be handed. These two travel together or the thumbnail is a lie — see [load].
  * @property shuffleFirst the item a shuffle started now would genuinely open on, or `null`
- *   when nothing is left to shuffle.
+ *   when the gallery is empty.
  * @property albumsAsGrid the persisted list/grid choice. Kept out of [load]'s write path
  *   (every update here is a `copy`) so a reload can never revert a toggle mid-flight.
  */
@@ -49,15 +48,15 @@ data class HomeUiState(
  *
  * Home used to need none — it was three static rows — and now it needs the whole gallery:
  * a hero, a cover per album, and the first card of a shuffle. That is one
- * [MediaRepository.queryAll] (~37ms for 2,573 items on the target device) plus one
- * `keptIds()` read, and it happens **here**, once per visit, rather than in three
- * `LaunchedEffect`s that would each pay for it again. Grouping, sorting and shuffling the
- * result is pure CPU work over a list that can run to five figures, so it goes to
- * [Dispatchers.Default]; the queries do their own IO hop internally.
+ * [MediaRepository.queryAll] (~37ms for 2,573 items on the target device), and it happens
+ * **here**, once per visit, rather than in three `LaunchedEffect`s that would each pay for
+ * it again. No database read at all: nothing on Home depends on what has been swiped
+ * before. Grouping, sorting and shuffling the result is pure CPU work over a list that can
+ * run to five figures, so it goes to [Dispatchers.Default]; the query does its own IO hop
+ * internally.
  */
 class HomeViewModel(
     private val media: MediaRepository,
-    private val db: SwipeyDatabase,
     private val preferences: HomePreferences,
 ) : ViewModel() {
 
@@ -84,18 +83,16 @@ class HomeViewModel(
      * Reads the gallery and resolves all three thumbnails.
      *
      * ### Why the shuffle is computed here and not at the tap
-     * The deck deals `queryAll()` minus everything already kept, then shuffles what is
-     * left with the seed it was given (`DeckViewModel.load`). So the item a shuffle opens
-     * on is the first element of the **filtered** list's shuffle — not the first element
-     * of the gallery's. Home applies the identical filter to the identical list from the
-     * identical query, shuffles it with [seed], and keeps that seed in state so the tap can
-     * hand the *same* one to the deck. Generate a fresh seed at navigation time instead and
-     * the thumbnail stops matching the moment the user has kept a single photo.
+     * The deck deals `queryAll()` and shuffles it with the seed it was given
+     * (`DeckViewModel.load`), so the item a shuffle opens on is element 0 of *that*
+     * shuffle. Home runs the identical call over the identical list and keeps the seed in
+     * state so the tap can hand the *same* one to the deck. Generate a fresh seed at
+     * navigation time instead and the thumbnail is simply a different photograph from the
+     * one the user lands on.
      *
-     * Two things this must not become: a cheaper "just pick the first unreviewed item"
-     * (that is a different item), and a clever way to compute element 0 without shuffling
-     * (that is a second implementation of an ordering the deck defines). Same list, same
-     * filter, same call.
+     * What this must not become is a clever way to compute element 0 without shuffling —
+     * that is a second implementation of an ordering the deck defines, and the two would
+     * drift. Same list, same call, same seed.
      */
     fun load(seed: Long = System.currentTimeMillis()) {
         loadJob?.cancel()
@@ -104,18 +101,19 @@ class HomeViewModel(
             // Spec §12: a MediaStore or Room throw becomes a retryable error state, never a
             // crash. Both calls are pure reads, so failing costs nothing but the load.
             val loaded = queryCatching {
-                val kept = db.reviewed().keptIds()
                 val all = media.queryAll()
                 withContext(Dispatchers.Default) {
-                    val keptIds = kept.toSet()
                     Loaded(
                         totalCount = all.size,
                         newest = all.mostRecent(),
                         albums = all.toAlbums(),
-                        shuffleFirst = all
-                            .filter { it.id !in keptIds }
-                            .shuffledWithSeed(seed)
-                            .firstOrNull(),
+                        // Shuffled from the same list the deck will queue, with the same
+                        // seed, so "Starts on this one" is the photograph you actually
+                        // land on. That correspondence is the whole reason this is
+                        // computed here rather than guessed — and it is why this filter
+                        // had to go the moment the deck's did: a Home that hid kept items
+                        // from a deck that shows them would promise the wrong picture.
+                        shuffleFirst = all.shuffledWithSeed(seed).firstOrNull(),
                     )
                 }
             }.getOrElse {

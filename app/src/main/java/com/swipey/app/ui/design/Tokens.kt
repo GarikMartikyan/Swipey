@@ -24,10 +24,10 @@ import androidx.compose.ui.unit.sp
  * ### Signal
  * The palette is near-monochrome and carries exactly **one** hue: an electric blue, spent
  * only on *keep*. There is no red in this file and there is no second accent. Binning is
- * not a colour at all — it is expressed by dimming and desaturation, because a binned
- * photo goes to the system trash and comes back from the in-app Bin, and an interface
- * that flashes a warning at the one action the app exists to make easy is scolding the
- * user for using it. See [SwipeyColors.bin].
+ * not a colour at all — the deck states it with a glyph on a neutral ground, because a
+ * binned photo goes to the system trash and comes back from the in-app Bin, and an
+ * interface that flashes a warning at the one action the app exists to make easy is
+ * scolding the user for using it. See [SwipeyColors.bin].
  *
  * Everything is reached through the [SwipeyTheme] object — `SwipeyTheme.colors.keep`,
  * `SwipeyTheme.typography.title` — mirroring the shape Compose users already expect,
@@ -57,8 +57,8 @@ import androidx.compose.ui.unit.sp
  * @property bin the "bin this photo" role. A **neutral**, not an accent, and deliberately
  *   the same value as [textSecondary]: Swipey never destroys anything — a binned photo
  *   goes to the system trash and is restored from the in-app Bin — so an accent colour
- *   here would overstate what a swipe does. Binning is expressed by dimming and
- *   desaturation instead (`ui/deck/SwipeCard.kt`). The cost of that honesty is that a bin
+ *   here would overstate what a swipe does. The deck says it with a bin glyph on a neutral
+ *   disc instead (`ui/deck/SwipeCard.kt`). The cost of that honesty is that a bin
  *   *control* cannot use hue to look interactive, so it uses treatment instead: see
  *   [SwipeyTone] for the ring-and-ground that does the job, and [SwipeyDisabledAlpha] for
  *   what keeps it from reading as disabled.
@@ -261,6 +261,17 @@ object SwipeyRadius {
 
     /** 20.dp — a bottom sheet's top corners, a touch softer than a card. */
     val sheet = 20.dp
+
+    /**
+     * 28.dp — the deck's photograph.
+     *
+     * Larger than [card] on purpose rather than by inconsistency: corner radius reads
+     * relative to the shape it is cutting, so a radius that visibly softens a grid
+     * thumbnail barely registers on something the size of the screen. This is the radius
+     * at which the deck's card reads as the same *family* as the thumbnails — matching the
+     * impression, not the measurement.
+     */
+    val deck = 28.dp
 }
 
 /** Fixed sizes that recur, mostly accessibility floors. */

@@ -1,5 +1,6 @@
 package com.swipey.app.ui.deck
 
+import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +37,7 @@ import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.swipey.app.R
 import com.swipey.app.data.contentUriFor
 import com.swipey.app.domain.MediaItem
 import com.swipey.app.ui.common.Copy
@@ -122,14 +124,19 @@ fun VideoCard(item: MediaItem) {
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
+            // Inflated rather than constructed, purely to reach `surface_type`. See
+            // res/layout/deck_player_view.xml: the default SurfaceView composites outside
+            // the Compose draw pass, so the card's rounded clip would not apply to video.
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
-                }.also { boundView[0] = it }
+                (LayoutInflater.from(ctx).inflate(R.layout.deck_player_view, null) as PlayerView)
+                    .apply {
+                        useController = false
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                    }
+                    .also { boundView[0] = it }
             },
             update = { view ->
                 // Rebind on every item/lifecycle change — `factory` only runs once,

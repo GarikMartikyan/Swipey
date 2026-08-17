@@ -62,12 +62,18 @@ import com.swipey.app.ui.design.rememberSwipeyHaptics
  * The deck: one photograph at a time, and two ways to decide about it.
  *
  * ### The photo is the interface
- * The image runs edge to edge and under the system bars; everything else floats on top
- * of it. There is no card frame, no toolbar and no background panel, because every one
- * of those would be a rectangle competing with the photograph for the same screen.
- * What chrome there is sits on a soft gradient — a scrim, not a bar — which is what
- * keeps a white counter legible over a snow scene without painting a grey band across
- * the top of every image.
+ * The image is a rounded card inset a hair inside the safe area, on a dark page — a
+ * lightbox, not a document. There is still no toolbar and no background panel, because
+ * either would be a rectangle competing with the photograph for the same screen; the
+ * gutter is the only frame, and it exists so the card has corners, so a lift has somewhere
+ * to grow, and so the card behind it reads as a card behind it. What chrome there is
+ * floats on a soft gradient — a scrim, not a bar — which keeps a white counter legible
+ * over a snow scene without painting a grey band across the top of every image.
+ *
+ * The scrims are full-width while the card is inset, so at the very top and bottom they
+ * fall across the page rather than the picture. That is deliberate: a scrim that stopped
+ * at the card's edge would draw a second rectangle around it, which is the thing this
+ * screen is built to avoid.
  *
  * ### Why the chrome is drawn in the dark palette in both themes
  * The ground under the counter, the chip and the three controls is a photograph, not the
@@ -187,10 +193,20 @@ fun DeckScreen(
     val item = state.current
     val currentId = item?.id
 
+    // Non-null while a button-initiated decision is flying out. Held here rather than in
+    // SwipeCard because the buttons live in the chrome, outside the card.
+    var commitRequest by remember { mutableStateOf<Boolean?>(null) }
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(SwipeyTheme.colors.canvas),
+            // Not the theme canvas. The deck is a lightbox: the card is grounded in the
+            // dark palette (it sits under a photograph, and the chrome over it is dark in
+            // both themes), so a light page behind it framed a near-black card in white.
+            // Dark here in both themes also gives the gutter something to be — against
+            // the dark theme's own canvas the two were nine values apart and the card had
+            // no visible edge at all.
+            .background(SwipeyDarkColors.canvas),
     ) {
         if (item == null) {
             SwipeyText(
@@ -206,10 +222,15 @@ fun DeckScreen(
                 // still matches the current card, so a mistimed commit can never be
                 // recorded against a photo the user never judged.
                 onSwiped = { id, keep ->
+                    // Cleared here, in the same state batch as the id change, so the
+                    // request cannot be re-read against the card that follows.
+                    commitRequest = null
                     viewModel.swipe(id, keep)
                     coachMarks.dismiss()
                 },
                 onCommittingChanged = { committing = it },
+                commitRequest = commitRequest,
+                under = state.next?.let { next -> { NextCardContent(next) } },
             ) {
                 MediaCardContent(item)
             }
@@ -232,10 +253,14 @@ fun DeckScreen(
                     // a second decision over the top of the one already committing.
                     decisionsEnabled = !committing && currentId != null,
                     undoEnabled = !committing,
+                    // Both buttons hand the decision to the card rather than recording it
+                    // directly, so a tap flies the photograph out exactly the way a drag
+                    // does. The decision itself is still recorded once, in `onSwiped`,
+                    // when that animation finishes.
                     onBin = {
-                        currentId?.let { id ->
+                        if (currentId != null) {
                             haptics.commit()
-                            viewModel.swipe(id, keep = false)
+                            commitRequest = false
                             coachMarks.dismiss()
                         }
                     },
@@ -244,9 +269,9 @@ fun DeckScreen(
                         viewModel.undo()
                     },
                     onKeep = {
-                        currentId?.let { id ->
+                        if (currentId != null) {
                             haptics.commit()
-                            viewModel.swipe(id, keep = true)
+                            commitRequest = true
                             coachMarks.dismiss()
                         }
                     },
@@ -483,6 +508,34 @@ private fun DeckMessage(
             }
         }
     }
+}
+
+/**
+ * The card waiting underneath, drawn as a still frame.
+ *
+ * Never [VideoCard], even when the next item is a video. That would stand a second
+ * ExoPlayer up for a clip nobody is watching yet, on the one screen where a dropped frame
+ * is felt in the thumb — and it would start playing audio behind the photograph the user
+ * is actually judging. Coil's video decoder is on the classpath (`coil.video`), so the
+ * same content URI yields a frame for video and the image itself for a photo.
+ *
+ * The model key is identical to [MediaCardContent]'s, which is the point: by the time this
+ * item becomes current, Coil serves it from the memory cache and the promotion is
+ * seamless rather than a re-fetch.
+ *
+ * No content description. This is not the item being judged; announcing it would put two
+ * photographs into a screen reader's account of a screen that only offers a decision about
+ * one of them.
+ */
+@Composable
+private fun NextCardContent(item: MediaItem) {
+    AsyncImage(
+        model = contentUriFor(item.id, item.isVideo),
+        contentDescription = null,
+        modifier = Modifier.fillMaxSize(),
+        // Matches MediaCardContent, so nothing shifts as the item is promoted.
+        contentScale = ContentScale.Fit,
+    )
 }
 
 /** The media itself: the whole screen, and the only thing on it that isn't chrome. */

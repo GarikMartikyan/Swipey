@@ -62,7 +62,7 @@ fun SwipeyRoot(app: SwipeyApp) {
 
     val deckViewModel: DeckViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { DeckViewModel(app.mediaRepository, app.database) }
+            initializer { DeckViewModel(app.mediaRepository) }
         },
     )
 
@@ -98,7 +98,7 @@ fun SwipeyRoot(app: SwipeyApp) {
                 val homeViewModel: HomeViewModel = viewModel(
                     factory = viewModelFactory {
                         initializer {
-                            HomeViewModel(app.mediaRepository, app.database, app.homePreferences)
+                            HomeViewModel(app.mediaRepository, app.homePreferences)
                         }
                     },
                 )
