@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.swipey.app.ui.common.Copy
+import com.swipey.app.domain.BinSide
 import com.swipey.app.ui.design.SwipeyButton
 import com.swipey.app.ui.design.SwipeyButtonVariant
 import com.swipey.app.ui.design.SwipeyIcon
@@ -43,6 +44,7 @@ import com.swipey.app.ui.design.SwipeySize
 import com.swipey.app.ui.design.SwipeySpacing
 import com.swipey.app.ui.design.SwipeyText
 import com.swipey.app.ui.design.SwipeyTheme
+import com.swipey.app.ui.settings.currentBinSide
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -160,14 +162,32 @@ fun DeckCoachMarkOverlay(modifier: Modifier = Modifier, onDismiss: () -> Unit) {
             )
             Spacer(Modifier.height(SwipeySpacing.lg))
 
+            // Left first and right second whichever way the deck is set, because the
+            // chevrons point where the words say and a panel that read right-then-left
+            // would fight itself. What changes is which outcome each line carries.
+            val binOnLeft = currentBinSide == BinSide.LEFT
             Hint(
-                text = Copy.COACH_SWIPE_LEFT,
-                leading = { SwipeyIcon(SwipeyIcons.ChevronLeft, contentDescription = null, tint = colors.bin, size = 18.dp) },
+                text = if (binOnLeft) Copy.coachBin(true) else Copy.coachKeep(false),
+                leading = {
+                    SwipeyIcon(
+                        SwipeyIcons.ChevronLeft,
+                        contentDescription = null,
+                        tint = if (binOnLeft) colors.bin else colors.keep,
+                        size = 18.dp,
+                    )
+                },
             )
             Spacer(Modifier.height(SwipeySpacing.sm))
             Hint(
-                text = Copy.COACH_SWIPE_RIGHT,
-                trailing = { SwipeyIcon(SwipeyIcons.ChevronRight, contentDescription = null, tint = colors.keep, size = 18.dp) },
+                text = if (binOnLeft) Copy.coachKeep(true) else Copy.coachBin(false),
+                trailing = {
+                    SwipeyIcon(
+                        SwipeyIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = if (binOnLeft) colors.keep else colors.bin,
+                        size = 18.dp,
+                    )
+                },
             )
 
             Spacer(Modifier.height(SwipeySpacing.lg))

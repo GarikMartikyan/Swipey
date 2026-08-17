@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.swipey.app.data.contentUriFor
+import com.swipey.app.domain.BinSide
 import com.swipey.app.domain.DecidedItem
 import com.swipey.app.domain.MediaItem
 import com.swipey.app.domain.formatBytes
@@ -93,6 +94,7 @@ import com.swipey.app.ui.design.SwipeyText
 import com.swipey.app.ui.design.SwipeyTheme
 import com.swipey.app.ui.design.SwipeyTone
 import com.swipey.app.ui.design.rememberSwipeyHaptics
+import com.swipey.app.ui.settings.currentBinSide
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -137,6 +139,10 @@ fun DeckScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptics = rememberSwipeyHaptics()
     val coachMarks = rememberDeckCoachMarks()
+    // Read once, here, and handed down: the card, the two buttons and the coach marks all
+    // describe the same gesture, and reading it three times would be three chances for them
+    // to be composed against different values mid-change.
+    val binSide = currentBinSide
     // Whether a swipe decision is currently mid fly-off animation; while true the
     // Bin/Undo/Keep buttons below are disabled so a tap can't record a decision
     // against a card that's already committing to a different one (fix round 1,
@@ -393,6 +399,7 @@ fun DeckScreen(
                     onTap = { previewing = true },
                     onTapLabel = Copy.DECK_PREVIEW,
                     under = state.next?.let { next -> { NextCardContent(next) } },
+                    binSide = binSide,
                 ) { dragProgress ->
                     // Not rendered while the preview is up: the preview shows the same item
                     // and, for a video, a second VideoCard would stand up a second
@@ -432,6 +439,7 @@ fun DeckScreen(
             Box(Modifier.fillMaxWidth()) {
                 DeckControls(
                     modifier = Modifier,
+                    binSide = binSide,
                     // Disabled for the length of the fly-off, so the buttons can't record
                     // a second decision over the top of the one already committing.
                     decisionsEnabled = !committing && currentId != null,
@@ -1070,12 +1078,35 @@ private fun DeckTopChrome(
 @Composable
 private fun DeckControls(
     modifier: Modifier,
+    binSide: BinSide,
     decisionsEnabled: Boolean,
     undoEnabled: Boolean,
     onBin: () -> Unit,
     onUndo: () -> Unit,
     onKeep: () -> Unit,
 ) {
+    // The buttons sit on the side their gesture goes, so the row is a picture of the deck.
+    // Undo stays in the middle either way: it is not a decision and belongs to neither side.
+    val bin = @Composable {
+        DeckControl(
+            icon = SwipeyIcons.Bin,
+            contentDescription = Copy.DECK_BIN_ACTION,
+            tone = SwipeyTone.Bin,
+            size = SwipeySize.touchPrimary,
+            enabled = decisionsEnabled,
+            onClick = onBin,
+        )
+    }
+    val keep = @Composable {
+        DeckControl(
+            icon = SwipeyIcons.Check,
+            contentDescription = Copy.DECK_KEEP_ACTION,
+            tone = SwipeyTone.Keep,
+            size = SwipeySize.touchPrimary,
+            enabled = decisionsEnabled,
+            onClick = onKeep,
+        )
+    }
     Row(
         modifier
             .fillMaxWidth()
@@ -1088,14 +1119,7 @@ private fun DeckControls(
         horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.xxl, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DeckControl(
-            icon = SwipeyIcons.Bin,
-            contentDescription = Copy.DECK_BIN_ACTION,
-            tone = SwipeyTone.Bin,
-            size = SwipeySize.touchPrimary,
-            enabled = decisionsEnabled,
-            onClick = onBin,
-        )
+        if (binSide == BinSide.LEFT) bin() else keep()
         DeckControl(
             icon = SwipeyIcons.Undo,
             contentDescription = Copy.DECK_UNDO_ACTION,
@@ -1105,14 +1129,7 @@ private fun DeckControls(
             enabled = undoEnabled,
             onClick = onUndo,
         )
-        DeckControl(
-            icon = SwipeyIcons.Check,
-            contentDescription = Copy.DECK_KEEP_ACTION,
-            tone = SwipeyTone.Keep,
-            size = SwipeySize.touchPrimary,
-            enabled = decisionsEnabled,
-            onClick = onKeep,
-        )
+        if (binSide == BinSide.LEFT) keep() else bin()
     }
 }
 

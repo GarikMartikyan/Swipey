@@ -6,6 +6,7 @@ object Routes {
     const val DECK = "deck?bucketId={bucketId}&sort={sort}&shuffle={shuffle}&seed={seed}&after={after}"
     const val REVIEW = "review"
     const val BIN = "bin"
+    const val SETTINGS = "settings"
 
     /**
      * @param seed the shuffle's ordering. It is a **route argument** rather than something

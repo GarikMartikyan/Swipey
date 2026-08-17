@@ -103,15 +103,73 @@ object Copy {
     const val MENU_TITLE = APP_NAME
 
     /**
-     * Settings, which does not go anywhere yet.
-     *
-     * Listed and visibly unavailable rather than hidden until it works. A menu of one item
-     * says the menu is finished; a menu with a greyed second item says the app has a
-     * settings screen coming, which is the truth. The note underneath is what keeps that
-     * from reading as a fault — a disabled row with no explanation is a bug report.
+     * Settings. No subtitle any more: the row led with "Not built yet" for as long as it
+     * led nowhere, and a row that works needs no note under it saying so.
      */
     const val MENU_SETTINGS = "Settings"
-    const val MENU_SETTINGS_SOON = "Not built yet"
+
+    // -----------------------------------------------------------------------
+    // Settings
+    // -----------------------------------------------------------------------
+
+    const val SETTINGS_TITLE = "Settings"
+
+    /**
+     * ### Every row says what is true, not what it is called
+     * A settings row conventionally names a thing and puts its value on the right: "Bin is
+     * on the — Left". That is only readable to someone who already knows what left *does*,
+     * which is everyone who built the app and nobody else. So each row here carries a
+     * sentence instead — "Swipe left to bin, right to keep" — and the sentence is rewritten
+     * whenever the setting changes. There is nothing to open in order to understand the
+     * screen; opening a row is for *changing* it.
+     *
+     * That is also why the sheet describes both options rather than listing two words. The
+     * moment a user is choosing between Left and Right is the moment they most need to be
+     * told what each one means.
+     */
+    const val SETTINGS_APPEARANCE = "Appearance"
+    const val SETTINGS_THEME_LIGHT = "Light"
+    const val SETTINGS_THEME_DARK = "Dark"
+
+    /** The row's line, and the sheet's. Names the palette, then the exception to it. */
+    fun settingsThemeSays(dark: Boolean) =
+        if (dark) "Dark. The deck stays dark either way" else "Light. The deck stays dark either way"
+
+    const val SETTINGS_THEME_LIGHT_SUB = "Near-white pages, dark text"
+    const val SETTINGS_THEME_DARK_SUB = "Near-black pages, light text"
+
+    /**
+     * Which side bins.
+     *
+     * "Swipe direction" rather than "Bin is on the", which was written for a row that
+     * carried its value on the right and dangles without one. The line underneath names the
+     * side, and names it as a gesture, which is how the setting is actually experienced.
+     */
+    const val SETTINGS_BIN_SIDE = "Swipe direction"
+    const val SETTINGS_SIDE_LEFT = "Left"
+    const val SETTINGS_SIDE_RIGHT = "Right"
+
+    fun settingsBinSays(binOnLeft: Boolean) =
+        if (binOnLeft) "Swipe left to bin, right to keep" else "Swipe right to bin, left to keep"
+
+    const val SETTINGS_SIDE_LEFT_SUB = "Flick left to bin, right to keep"
+    const val SETTINGS_SIDE_RIGHT_SUB = "Flick right to bin, left to keep"
+
+    /**
+     * The video sound default.
+     *
+     * "Video sound" and not "Start videos with sound", because the row is a heading now and
+     * the sentence under it does the describing. What that sentence has to keep saying is
+     * that this is a *starting* value: muting a clip still carries to the clips after it,
+     * exactly as it always has, and this only decides which way each run of the app begins.
+     */
+    const val SETTINGS_VIDEO_SOUND = "Video sound"
+    const val SETTINGS_VIDEO_SOUND_ON = "Clips play aloud until you mute one"
+    const val SETTINGS_VIDEO_SOUND_OFF = "Clips play silently until you unmute one"
+    const val SETTINGS_ON = "On"
+    const val SETTINGS_OFF = "Off"
+    const val SETTINGS_ON_SUB = "Every clip arrives playing aloud"
+    const val SETTINGS_OFF_SUB = "Every clip arrives silent"
 
     /**
      * Digit grouping for the counts Home shows, which run to five figures on a full phone.
@@ -205,8 +263,16 @@ object Copy {
     // sentence: where things go, whose trash it is, and that nothing is destroyed.
 
     const val COACH_TITLE = "Two ways to decide"
-    const val COACH_SWIPE_LEFT = "Swipe left to bin"
-    const val COACH_SWIPE_RIGHT = "Swipe right to keep"
+
+    /**
+     * The two lines that teach the gesture — and they have to be told which way round the
+     * deck is dealing, now that Settings can flip it. A coach mark is the one piece of copy
+     * in the app that must never be able to disagree with the control it describes: it is
+     * read once, believed, and never shown again.
+     */
+    fun coachBin(binOnLeft: Boolean) = if (binOnLeft) "Swipe left to bin" else "Swipe right to bin"
+
+    fun coachKeep(binOnLeft: Boolean) = if (binOnLeft) "Swipe right to keep" else "Swipe left to keep"
     const val COACH_REASSURE =
         "Binned items go to your phone's trash — nothing is deleted permanently, " +
             "and Undo takes back your last decision."

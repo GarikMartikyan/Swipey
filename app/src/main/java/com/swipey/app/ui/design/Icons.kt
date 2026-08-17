@@ -347,6 +347,80 @@ object SwipeyIcons {
     }
 
     /**
+     * Sun. A disc and eight rays.
+     *
+     * Settings shows this or [Moon] depending on which palette is in force, rather than one
+     * neutral glyph for "appearance" — a half-filled circle is the conventional mark and it
+     * says only *that a theme exists*, where a sun says which one you are looking at. The row
+     * then answers its own question before it is opened, which is the whole idea of that
+     * screen.
+     *
+     * Eight rays and not four: four reads as a compass. They stop short of the frame so the
+     * glyph keeps the same optical size as the rest of the set, which are mostly boxes.
+     */
+    val Sun: ImageVector = icon("Sun") {
+        // Disc, drawn as two half-arcs like every other circle here.
+        moveTo(12f, 7.5f)
+        arcTo(4.5f, 4.5f, 0f, false, true, 12f, 16.5f)
+        arcTo(4.5f, 4.5f, 0f, false, true, 12f, 7.5f)
+        // Rays, on the eight principal angles.
+        moveTo(12f, 2.5f)
+        lineTo(12f, 5.1f)
+        moveTo(12f, 18.9f)
+        lineTo(12f, 21.5f)
+        moveTo(2.5f, 12f)
+        lineTo(5.1f, 12f)
+        moveTo(18.9f, 12f)
+        lineTo(21.5f, 12f)
+        moveTo(5.28f, 5.28f)
+        lineTo(7.12f, 7.12f)
+        moveTo(16.88f, 16.88f)
+        lineTo(18.72f, 18.72f)
+        moveTo(5.28f, 18.72f)
+        lineTo(7.12f, 16.88f)
+        moveTo(16.88f, 7.12f)
+        lineTo(18.72f, 5.28f)
+    }
+
+    /**
+     * Moon. A crescent, cut from one disc by another.
+     *
+     * Two arcs and a close: the outer sweep is the moon's edge, the inner one is the shadow
+     * biting into it. Drawing it as a subtraction rather than as a banana is what keeps the
+     * horns sharp at 22dp — a hand-drawn crescent goes blunt at the tips and reads as a
+     * kidney. See [Sun], which this pairs with.
+     */
+    val Moon: ImageVector = icon("Moon") {
+        moveTo(20.6f, 13.1f)
+        arcTo(8.6f, 8.6f, 0f, true, true, 11.3f, 3.7f)
+        arcTo(6.7f, 6.7f, 0f, false, false, 20.6f, 13.1f)
+        close()
+    }
+
+    /**
+     * Two arrows, one going each way — which side of the deck bins.
+     *
+     * Not [Bin], and not [Shuffle]. The bin glyph would name the outcome and say nothing
+     * about the setting, which is a *direction*; Shuffle's two paths cross, and crossing is
+     * exactly the wrong idea here — these two never meet. Opposed arrows on their own rows
+     * is the oldest way of drawing "these two can be swapped over".
+     */
+    val SwapSides: ImageVector = icon("SwapSides") {
+        // Upper, pointing left.
+        moveTo(20.5f, 9f)
+        lineTo(4.5f, 9f)
+        moveTo(8.5f, 5f)
+        lineTo(4.5f, 9f)
+        lineTo(8.5f, 13f)
+        // Lower, pointing right.
+        moveTo(3.5f, 15f)
+        lineTo(19.5f, 15f)
+        moveTo(15.5f, 11f)
+        lineTo(19.5f, 15f)
+        lineTo(15.5f, 19f)
+    }
+
+    /**
      * Builds one glyph to the house rules above. Every glyph shares this single [path]
      * call, so the stroke weight, caps and joins can only ever be changed for the whole
      * set.

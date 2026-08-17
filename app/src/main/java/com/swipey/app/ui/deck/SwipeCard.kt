@@ -44,6 +44,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.swipey.app.domain.BinSide
+import com.swipey.app.domain.decisionProgress
+import com.swipey.app.domain.flightIsRight
+import com.swipey.app.domain.keepFor
 import com.swipey.app.ui.design.SwipeyDarkColors
 import com.swipey.app.ui.design.SwipeyIcon
 import com.swipey.app.ui.design.SwipeyIcons
@@ -225,6 +229,16 @@ fun SwipeCard(
     onTap: (() -> Unit)? = null,
     onTapLabel: String? = null,
     under: (@Composable () -> Unit)? = null,
+    /**
+     * Which side bins. Defaulted so the previews and the drag-feedback sampler below keep
+     * describing the deck as it ships; the deck itself always passes the user's setting.
+     *
+     * Read as a parameter rather than off [com.swipey.app.ui.settings.LocalSettings] here on
+     * purpose: this is the file that turns a gesture into a decision, and a decision that
+     * depended on ambient state would be untestable and unpreviewable in the one place it
+     * most matters.
+     */
+    binSide: BinSide = BinSide.LEFT,
     content: @Composable (dragProgress: () -> Float) -> Unit,
 ) {
     // Measured against the screen rather than the card on purpose. The card is now
@@ -308,8 +322,12 @@ fun SwipeCard(
         // Whatever raised the lift — a thumb, or nothing at all on a button commit — the
         // card is leaving, so it goes back down alongside the fly-off rather than after it.
         launch { lift.animateTo(0f, SwipeyMotion.press()) }
+        // Towards the side that decision lives on, which is not the same as "right for a
+        // keep" once the setting has been flipped. The buttons under the deck commit through
+        // here too, and a Bin button that flew the card the way a keep goes would teach the
+        // gesture backwards.
         offsetX.animateTo(
-            if (keep) screenWidthPx * 1.5f else -screenWidthPx * 1.5f,
+            if (binSide.flightIsRight(keep)) screenWidthPx * 1.5f else -screenWidthPx * 1.5f,
             tween(ExitMillis),
         )
         fired[0] = true
@@ -378,7 +396,8 @@ fun SwipeCard(
                             // take the direction from the fling itself — position
                             // alone (e.g. +20px after a sharp leftward flick) can
                             // disagree with it (fix round 1, Important 2).
-                            pendingKeep = if (overThreshold) offsetX.value > 0 else velocity > 0
+                            val towardsRight = if (overThreshold) offsetX.value > 0 else velocity > 0
+                            pendingKeep = binSide.keepFor(towardsRight)
                             haptics.commit()
                         } else {
                             pastThreshold = false
@@ -503,9 +522,12 @@ fun SwipeCard(
         // accessible names for both decisions, and a screen-reader user never sees a drag
         // progress in the first place, so this is cleared from the tree rather than
         // announced at alpha 0.
+        // Signed by *outcome*, not by direction: the glyph answers "which way is this
+        // going" in the deck's terms, and those terms are what the setting changes. Still a
+        // function, so the flip costs nothing per frame.
         DecisionGlyph(
             modifier = Modifier.align(Alignment.Center),
-            progress = ::progress,
+            progress = { binSide.decisionProgress(progress()) },
         )
     }
 }

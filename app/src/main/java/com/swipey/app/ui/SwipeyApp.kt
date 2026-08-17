@@ -30,10 +30,12 @@ import com.swipey.app.ui.common.queryCatching
 import com.swipey.app.ui.common.rememberTrashLauncher
 import com.swipey.app.ui.deck.DeckScreen
 import com.swipey.app.ui.deck.DeckViewModel
+import com.swipey.app.ui.deck.forgetVideoSoundChoice
 import com.swipey.app.ui.home.HomeScreen
 import com.swipey.app.ui.home.HomeViewModel
 import com.swipey.app.ui.permission.PermissionGate
 import com.swipey.app.ui.review.ReviewScreen
+import com.swipey.app.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
 /**
@@ -140,12 +142,33 @@ fun SwipeyRoot(app: SwipeyApp) {
                     },
                     onAlbum = { album -> navController.navigate(Routes.deck(bucketId = album.bucketId)) },
                     onBin = { navController.navigate(Routes.BIN) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
                 )
             }
 
             composable(Routes.SORT) {
                 SortChooserScreen(
                     onPick = { mode -> navController.navigate(Routes.deck(sort = mode.name)) },
+                )
+            }
+
+            composable(Routes.SETTINGS) {
+                // Read from the store rather than from LocalSettings, so this screen is
+                // reading the same object it writes and cannot show a value one frame
+                // behind the one it just set.
+                val settings by app.settingsPreferences.state.collectAsStateWithLifecycle()
+                SettingsScreen(
+                    settings = settings,
+                    onTheme = app.settingsPreferences::setTheme,
+                    onBinSide = app.settingsPreferences::setBinSide,
+                    onVideoSound = { on ->
+                        app.settingsPreferences.setVideoSound(on)
+                        // The run's own sound decision is thrown away, so the next clip
+                        // takes the new setting. Without this, turning sound on here and
+                        // going straight back to a deck that had been muted would leave it
+                        // muted — a switch that appears not to work.
+                        forgetVideoSoundChoice()
+                    },
                 )
             }
 

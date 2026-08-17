@@ -108,6 +108,7 @@ fun HomeScreen(
     onResume: (ResumePoint) -> Unit,
     onAlbum: (Album) -> Unit,
     onBin: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hasContent = state.albums.isNotEmpty()
@@ -122,6 +123,7 @@ fun HomeScreen(
                 // Closed before it navigates, so coming back from the Bin does not land on
                 // a drawer the user has no memory of leaving open.
                 onBin = { menuOpen = false; onBin() },
+                onSettings = { menuOpen = false; onSettings() },
             )
         },
     ) {
@@ -455,9 +457,12 @@ private fun BoxScope.CaptionGradient(heightFraction: Float) = SwipeyCaptionGradi
  * promise the row did not need to make, and keeping it true meant shuffling the entire
  * library on every visit to Home purely to find element zero.
  *
- * @param resume null before the user has swiped anything, and the tile draws itself as
- *   unavailable rather than vanishing. A control that appears only once you have used the
- *   app is one you have to find twice.
+ * @param resume null before the user has swiped anything, or once the queue they swiped has
+ *   nothing left in it — not merely because the photograph they stopped on was deleted,
+ *   which is the ordinary end of a session and now resolves to its neighbour
+ *   (`HomeViewModel.resolveResume`). The tile draws null as unavailable rather than
+ *   vanishing: a control that appears only once you have used the app is one you have to
+ *   find twice.
  */
 @Composable
 private fun ShuffleAndRecentRow(
@@ -803,6 +808,7 @@ private fun HomeMenu(
     binCount: Int,
     onDismiss: () -> Unit,
     onBin: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     SwipeyDrawer(visible = visible, onDismiss = onDismiss, title = Copy.MENU_TITLE) {
         SwipeyRow(
@@ -821,11 +827,7 @@ private fun HomeMenu(
         )
         SwipeyRow(
             title = Copy.MENU_SETTINGS,
-            subtitle = Copy.MENU_SETTINGS_SOON,
-            // No onClick at all rather than a disabled one: a row that cannot be pressed
-            // should not be press-feedback-capable, and this way it also loses the chevron,
-            // which is what stops it looking like a row that has stopped working.
-            enabled = false,
+            onClick = onSettings,
             divider = false,
             leading = {
                 SwipeyIcon(

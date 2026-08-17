@@ -25,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +55,7 @@ import com.swipey.app.ui.design.SwipeySize
 import com.swipey.app.ui.design.SwipeySpacing
 import com.swipey.app.ui.design.SwipeyText
 import com.swipey.app.ui.design.SwipeyTheme
+import com.swipey.app.ui.settings.LocalSettings
 import kotlinx.coroutines.delay
 
 /**
@@ -109,7 +109,7 @@ private val TimelineRow = 48.dp
  * the caller wiring up listeners.
  */
 @Stable
-class VideoPlayback internal constructor(private val itemId: Long) {
+class VideoPlayback internal constructor(private val itemId: Long, muted: Boolean) {
 
     internal var player: ExoPlayer? by mutableStateOf(null)
 
@@ -120,9 +120,14 @@ class VideoPlayback internal constructor(private val itemId: Long) {
     /**
      * Deliberately *not* per item: sound is a decision about the session, not about one
      * clip. Someone who turns it on to hear what a video is should not have to turn it on
-     * again for the next one. [rememberVideoPlayback] seeds this from a saved flag.
+     * again for the next one.
+     *
+     * Which is why it arrives as a constructor argument rather than starting at a fixed
+     * value and being corrected by an effect afterwards. A player built muted and unmuted a
+     * frame later is a player that says the wrong thing for a frame — and, worse, gives the
+     * effect that reports changes back to [VideoSound] a spurious first value to report.
      */
-    var muted: Boolean by mutableStateOf(true)
+    var muted: Boolean by mutableStateOf(muted)
         internal set
 
     /** Where the clip is now, polled while it plays. */
@@ -153,8 +158,17 @@ class VideoPlayback internal constructor(private val itemId: Long) {
         playing = !playing
     }
 
+    /**
+     * The sound button, on the card and in the preview alike.
+     *
+     * Reports the new value to [VideoSound] here rather than through an effect watching
+     * [muted], because a tap is the *only* thing that changes it: an effect would also fire
+     * for the seed, and for the second player the preview stands up over the first, and
+     * would have to distinguish those from a decision. This cannot.
+     */
     fun toggleMuted() {
         muted = !muted
+        VideoSound.set(muted)
     }
 
     fun seekTo(ms: Long) {
@@ -227,6 +241,53 @@ private object VideoResume {
 }
 
 /**
+ * Whether the sound is on, for this run of the app.
+ *
+ * ### Three claims, and this object is the second and third
+ * Settings says which way a run *starts*. Turning the sound on or off during a clip carries
+ * to the clips after it — sound is a decision about the session, not about one photograph,
+ * and it always has been. And the next launch starts from Settings again, whatever was done
+ * last time.
+ *
+ * That last claim is why this is an object and not a `rememberSaveable`. A saveable survives
+ * an Activity recreation, which is right — a rotation is not a new run — but it *also*
+ * survives process death, because Android hands the saved bundle back when a task is
+ * resumed. The user would then find last week's mute still in force on a cold start, which
+ * is exactly what "when I launch the app, apply the behaviour from settings" rules out. A
+ * plain object dies with the process, which is the lifetime the promise is about.
+ *
+ * Nothing is written back to Settings. Muting one loud clip in a quiet room is a decision
+ * about that moment; treating it as a change of mind about the app would leave the setting
+ * drifting somewhere the user never put it.
+ */
+private object VideoSound {
+
+    /** Null until the first clip of the run, when [mutedWith] seeds it from Settings. */
+    private var muted: Boolean? = null
+
+    /** The session's answer, seeding it from [soundOn] if this is the run's first clip. */
+    fun mutedWith(soundOn: Boolean): Boolean = muted ?: (!soundOn).also { muted = it }
+
+    fun set(value: Boolean) {
+        muted = value
+    }
+
+    /**
+     * Throws the session's answer away, so the next clip takes the setting again.
+     *
+     * Called when the user changes the setting itself. Anything else would mean opening
+     * Settings, turning sound on, going back to the deck and finding it still silent —
+     * a switch that visibly does nothing is worse than no switch.
+     */
+    fun forget() {
+        muted = null
+    }
+}
+
+/** Re-seeds video sound from Settings. Called when the setting is changed. */
+fun forgetVideoSoundChoice() = VideoSound.forget()
+
+/**
  * Builds the player for [item] and keeps it alive for as long as this composable is.
  *
  * Released on ON_STOP so a backgrounded app doesn't hold a hardware decoder for the whole
@@ -236,14 +297,18 @@ private object VideoResume {
 @Composable
 fun rememberVideoPlayback(item: MediaItem): VideoPlayback {
     val context = LocalContext.current
-    val playback = remember(item.id) { VideoPlayback(item.id) }
+    // The sound this run is running with. It survives the trip into the preview and back,
+    // an Activity recreation, and every clip change for the rest of the run — but not the
+    // run itself, which is the whole point. See [VideoSound], where all three halves of that
+    // promise are argued.
+    val soundOn = LocalSettings.current.videoSound
+    val playback = remember(item.id) { VideoPlayback(item.id, VideoSound.mutedWith(soundOn)) }
 
-    // Survives the trip into the preview and back, and an Activity recreation. Held here
-    // rather than inside VideoPlayback because rememberSaveable needs a composition to
-    // live in, and the holder is deliberately not one.
-    var mutedSaved by rememberSaveable { mutableStateOf(true) }
-    LaunchedEffect(playback, mutedSaved) { playback.muted = mutedSaved }
-    LaunchedEffect(playback.muted) { mutedSaved = playback.muted }
+    // The setting itself moved while the app was running. `forgetVideoSoundChoice` has
+    // already thrown this run's answer away by the time this lands, so `mutedWith` re-seeds
+    // — and it reaches the clip currently on screen rather than only the one after it,
+    // because a switch that visibly does nothing is worse than no switch.
+    LaunchedEffect(soundOn) { playback.muted = VideoSound.mutedWith(soundOn) }
 
     LifecycleStartEffect(item.id) {
         playback.player = ExoPlayer.Builder(context).build().apply {
