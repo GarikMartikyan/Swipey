@@ -100,8 +100,10 @@ class DeckViewModel(
     /**
      * @param startAfterId opens on the card following this one rather than at the top of the
      *   queue — Home's "Recent", carrying the user back to where they stopped. Ignored if the
-     *   item is no longer in the library, which is a normal outcome: it may well have been
-     *   the one they marked and then committed.
+     *   item is no longer in the queue, which then opens at the top. Home relies on that:
+     *   when the photograph the bookmark named has been deleted and nothing in the queue
+     *   preceded it, "deal after a card that isn't there" is precisely how it asks for the
+     *   top. See `HomeViewModel.resolveResume`.
      */
     fun load(bucketId: Long?, sort: SortMode, shuffle: Boolean, seed: Long, startAfterId: Long? = null) {
         lastLoad = { load(bucketId, sort, shuffle, seed, startAfterId) }
@@ -199,8 +201,17 @@ class DeckViewModel(
      */
     private fun remember(itemId: Long) {
         val identity = queueIdentity ?: return
+        // The whole photograph, not just its id: the bookmark records where it sat in this
+        // queue's order so that Home can still find that position after the photograph
+        // itself has been trashed — which is the ordinary end of a session. See
+        // `HomePreferences.ResumePoint` and `domain/ResumeAnchor.kt`.
+        val item = session.itemFor(itemId) ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            preferences.resumePoint = identity.copy(itemId = itemId)
+            preferences.resumePoint = identity.copy(
+                itemId = item.id,
+                itemDateSec = item.dateAddedSec,
+                itemSizeBytes = item.sizeBytes,
+            )
         }
     }
 

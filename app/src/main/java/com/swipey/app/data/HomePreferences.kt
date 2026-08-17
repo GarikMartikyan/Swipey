@@ -6,8 +6,8 @@ import androidx.core.content.edit
 /**
  * Where the last session got to, and how to open it again.
  *
- * All five fields are needed to keep the promise "carry on from here": the item says where,
- * and the rest say *which queue that position means*. The same photograph sits at a
+ * The first five fields are needed to keep the promise "carry on from here": the item says
+ * where, and the rest say *which queue that position means*. The same photograph sits at a
  * different place in an album than in the whole library, and somewhere else again in a
  * shuffle — so a resume that remembered only the id would land somewhere arbitrary.
  *
@@ -18,6 +18,13 @@ import androidx.core.content.edit
  * @param seed only meaningful when [shuffle] is set, and then it is essential — a shuffle
  *   with a different seed is a different queue, and the remembered position would name a
  *   different photograph.
+ * @param itemDateSec the photograph's `DATE_ADDED`, and @param itemSizeBytes its size:
+ *   together with [itemId] they are its place in a queue's order, which is what lets the
+ *   bookmark **outlive the photograph**. The commonest way to end a session is to mark the
+ *   photograph you stopped on and commit it, so a bookmark that could only be honoured while
+ *   its subject existed went dark exactly when it was most wanted. See
+ *   [com.swipey.app.domain.QueuePlace]. Null only for a bookmark written before this was
+ *   recorded, which the next decision replaces.
  */
 data class ResumePoint(
     val itemId: Long,
@@ -25,6 +32,8 @@ data class ResumePoint(
     val sort: String,
     val shuffle: Boolean,
     val seed: Long,
+    val itemDateSec: Long? = null,
+    val itemSizeBytes: Long? = null,
 )
 
 /**
@@ -61,9 +70,13 @@ class HomePreferences(context: Context) {
      * swiped at all — which is the state Home's Recent tile draws as unavailable rather
      * than as an empty one.
      *
-     * Written as five keys rather than one encoded string so the file stays readable and a
-     * half-written value can never parse into a plausible-but-wrong queue; the id is the
+     * Written as separate keys rather than one encoded string so the file stays readable and
+     * a half-written value can never parse into a plausible-but-wrong queue; the id is the
      * one that decides whether there is anything here at all.
+     *
+     * The date and size read back as null when their keys are absent, which is what a
+     * bookmark written by an older build looks like. Sizes and timestamps are never
+     * negative, so [NONE] is as free a sentinel here as it is for the ids.
      */
     var resumePoint: ResumePoint?
         get() {
@@ -76,6 +89,8 @@ class HomePreferences(context: Context) {
                 sort = prefs.getString(KEY_RESUME_SORT, null) ?: DEFAULT_SORT,
                 shuffle = prefs.getBoolean(KEY_RESUME_SHUFFLE, false),
                 seed = prefs.getLong(KEY_RESUME_SEED, 0L),
+                itemDateSec = prefs.getLong(KEY_RESUME_DATE, NONE).takeIf { it != NONE },
+                itemSizeBytes = prefs.getLong(KEY_RESUME_SIZE, NONE).takeIf { it != NONE },
             )
         }
         set(value) = prefs.edit {
@@ -87,6 +102,8 @@ class HomePreferences(context: Context) {
                 putString(KEY_RESUME_SORT, value.sort)
                 putBoolean(KEY_RESUME_SHUFFLE, value.shuffle)
                 putLong(KEY_RESUME_SEED, value.seed)
+                putLong(KEY_RESUME_DATE, value.itemDateSec ?: NONE)
+                putLong(KEY_RESUME_SIZE, value.itemSizeBytes ?: NONE)
             }
         }
 
@@ -98,6 +115,8 @@ class HomePreferences(context: Context) {
         const val KEY_RESUME_SORT = "resume_sort"
         const val KEY_RESUME_SHUFFLE = "resume_shuffle"
         const val KEY_RESUME_SEED = "resume_seed"
+        const val KEY_RESUME_DATE = "resume_date"
+        const val KEY_RESUME_SIZE = "resume_size"
 
         /** MediaStore ids are positive and bucket ids are non-negative, so -1 is free. */
         const val NONE = -1L

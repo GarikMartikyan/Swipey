@@ -113,6 +113,16 @@ class SwipeSession(queue: List<MediaItem>) {
     fun peek(offset: Int): MediaItem? = queue.getOrNull(position + offset)
 
     /**
+     * The item this session holds under [id], or null if it never held one.
+     *
+     * Backed by [byId], so callers that only have an id — the grid hands back what it was
+     * given, and so does the card's commit animation — can reach the whole photograph
+     * without a scan. The bookmark needs it: a resume point records where a photograph sat
+     * in the queue's order, not only which one it was.
+     */
+    fun itemFor(id: Long): MediaItem? = byId[id]
+
+    /**
      * The last [count] photographs the deck has passed, oldest first.
      *
      * The filmstrip's left-hand side. Oldest first because the strip lays the session out

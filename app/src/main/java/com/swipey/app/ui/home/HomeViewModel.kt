@@ -7,7 +7,10 @@ import com.swipey.app.data.MediaRepository
 import com.swipey.app.data.ResumePoint
 import com.swipey.app.domain.Album
 import com.swipey.app.domain.MediaItem
+import com.swipey.app.domain.QueuePlace
+import com.swipey.app.domain.SortMode
 import com.swipey.app.domain.mostRecent
+import com.swipey.app.domain.resumeAnchor
 import com.swipey.app.domain.toAlbums
 import com.swipey.app.ui.common.queryCatching
 import kotlinx.coroutines.Dispatchers
@@ -36,13 +39,15 @@ data class HomeUiState(
     val albums: List<Album> = emptyList(),
     val albumsAsGrid: Boolean = false,
     /**
-     * Where the last session stopped, and the photograph it stopped on — resolved against
-     * the gallery that was just read, so a bookmark pointing at something since deleted
-     * comes back null rather than as an offer that leads nowhere.
+     * Where the last session stopped, and a photograph of it — resolved against the gallery
+     * that was just read, so the offer always leads somewhere that exists.
      *
-     * Null is the ordinary state on a first run, and the Recent tile draws itself as
-     * unavailable rather than absent: a control that appears only after you have used the
-     * app is one you have to discover twice.
+     * Null now means only one thing: there is no queue left to resume. On a first run, and
+     * when the album the bookmark named has been emptied. A bookmark whose *own* photograph
+     * has gone is no longer null — see [resolveResume].
+     *
+     * The Recent tile draws null as unavailable rather than absent: a control that appears
+     * only after you have used the app is one you have to discover twice.
      */
     val resume: ResumeOffer? = null,
 )
@@ -50,9 +55,13 @@ data class HomeUiState(
 /**
  * The Recent tile's contents: where to go, and a picture of it.
  *
- * @property item the photograph the last decision was made on. Shown rather than the one
- *   that would be dealt next, because that is the one the user remembers — the next card is
- *   by definition one they have never seen.
+ * @property item the photograph to show. The one the last decision was made on while it is
+ *   still there — shown rather than the one that would be dealt next, because that is the
+ *   one the user remembers — and its nearest surviving neighbour once it is not.
+ * @property point the queue to deal and the card to deal *after*. Its `itemId` is the
+ *   bookmarked photograph while that photograph exists, and a surviving stand-in for its
+ *   position once it does not; either way it names the card the deck resumes behind. See
+ *   [resolveResume].
  */
 data class ResumeOffer(val point: ResumePoint, val item: MediaItem)
 
@@ -119,12 +128,7 @@ class HomeViewModel(
                         totalCount = all.size,
                         newest = all.mostRecent(),
                         albums = all.toAlbums(),
-                        // Resolved against the library as it stands. A bookmark outlives the
-                        // photograph it names — the likeliest way to leave a session is to
-                        // mark that photograph and commit it — and an offer to carry on from
-                        // something that no longer exists is worse than no offer.
-                        resume = point
-                            ?.let { p -> all.firstOrNull { it.id == p.itemId }?.let { ResumeOffer(p, it) } },
+                        resume = point?.let { resolveResume(it, all) },
                     )
                 }
             }.getOrElse {
@@ -165,3 +169,62 @@ class HomeViewModel(
         val resume: ResumeOffer?,
     )
 }
+
+/**
+ * Turns the bookmark into an offer, against the library as it stands.
+ *
+ * ### The photograph is usually gone
+ * This used to be one `firstOrNull { it.id == point.itemId }`, and it went null on the
+ * commonest path there is: the bookmark follows the user's last *decision*, the last
+ * decision of a session is very often a mark, and a mark is a photograph on its way to the
+ * bin. Delete what you were looking at and the tile that exists to take you back to it went
+ * dark — and worse than dark, because the deck's `startAfter` also silently fails on a
+ * missing id and deals from the top of the queue instead.
+ *
+ * So a dead bookmark is now resolved to its nearest surviving neighbour instead: the card
+ * that *followed* it, which is where the user was going next, and failing that the card
+ * before it, which is the end of a queue they have finished. Only an empty queue is null
+ * now. See [resumeAnchor], which does the finding.
+ *
+ * ### The neighbour comes from the bookmarked queue, not the gallery
+ * A resume into one album that offered a picture from another would be describing a queue
+ * the tap will not deal. The filter is the same one the deck applies to build that queue.
+ */
+internal fun resolveResume(point: ResumePoint, all: List<MediaItem>): ResumeOffer? {
+    val queue = if (point.bucketId == null) all else all.filter { it.bucketId == point.bucketId }
+
+    val date = point.itemDateSec
+    val size = point.itemSizeBytes
+    // A bookmark from before the place was recorded can still be honoured exactly, and
+    // cannot be honoured approximately — there is nothing to measure a neighbour against.
+    // One visit's worth of the old behaviour, until the next decision rewrites it.
+    if (date == null || size == null) {
+        return queue.firstOrNull { it.id == point.itemId }?.let { ResumeOffer(point, it) }
+    }
+
+    val anchor = queue.resumeAnchor(
+        place = QueuePlace(point.itemId, date, size),
+        // A shuffle has no order that survives a deletion: the same seed over a library one
+        // picture shorter is a different permutation, so there is no "the card after that
+        // one" left to find. Date order stands in, and the offer degrades to "a picture from
+        // near where you stopped" — which is all a resumed shuffle was ever able to promise,
+        // since the deck reshuffles the surviving library on arrival either way.
+        order = if (point.shuffle) SortMode.NEWEST else point.sortMode(),
+    ) ?: return null
+
+    // Null `after` means nothing in the queue precedes the bookmark any more, so there is
+    // no card to deal behind. Keeping the dead id is how that is said: the deck's
+    // `startAfter` finds nothing and opens at the top, which is exactly the position the
+    // bookmark named.
+    return ResumeOffer(point.copy(itemId = anchor.after?.id ?: point.itemId), anchor.item)
+}
+
+/**
+ * The bookmark's sort, or newest-first if the file holds something that is not one.
+ *
+ * `SortMode.valueOf` would throw, and this runs inside `queryCatching` — so a single
+ * unrecognised string would take Home to its "we couldn't look" state, blaming a gallery
+ * read for a bookmark nobody can parse.
+ */
+private fun ResumePoint.sortMode(): SortMode =
+    SortMode.entries.firstOrNull { it.name == sort } ?: SortMode.NEWEST
