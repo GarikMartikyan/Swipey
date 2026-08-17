@@ -6,6 +6,15 @@ local.properties
 *.iml
 .idea/
 
+# The published build is the one exception to *.apk above: it is what the
+# README's download button points at, so it has to be in the repository.
+!dist/*.apk
+
+# Release signing. The keystore IS the app's identity — anyone holding it can
+# ship an update that installs over Swipey. Never commit either of these.
+keystore/
+keystore.properties
+
 # macOS
 .DS_Store
 

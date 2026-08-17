@@ -1,8 +1,25 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+/**
+ * Release signing, read from `keystore.properties` at the repository root.
+ *
+ * Absent on a fresh clone, and that is deliberate rather than an oversight: the keystore is
+ * the app's identity, so it is gitignored along with the passwords that open it. A clone
+ * without them still builds and still runs — `assembleDebug` is unaffected, and
+ * `assembleRelease` falls back to producing an unsigned APK, exactly as it did before this
+ * block existed. Only the person holding the keystore can produce the artifact that installs
+ * over an existing Swipey.
+ */
+val signingProps = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { file ->
+    Properties().apply { file.inputStream().use { load(it) } }
+}
+
 android {
     namespace = "com.swipey.app"
     compileSdk = 37
@@ -14,6 +31,31 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    signingConfigs {
+        if (signingProps != null) {
+            create("release") {
+                storeFile = rootProject.file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Only when the keystore is actually here; see [signingProps]. Left unsigned
+            // otherwise, which is what a release build did before and is honest about what
+            // it is — an APK nobody can install rather than one pretending to be signed.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+            // R8 stays off. The app is 26MB of ExoPlayer, Coil and Compose, and shrinking
+            // it would be worth doing — but it is a change to what runs, not to how it is
+            // packaged, and the release build is what people download. That deserves its
+            // own pass with its own testing rather than riding along with a README.
+            isMinifyEnabled = false
+        }
+    }
+
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
