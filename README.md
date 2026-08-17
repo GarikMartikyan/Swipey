@@ -6,7 +6,7 @@
 
 <br>
 
-[![Download the APK](https://img.shields.io/badge/Download%20APK-v1.0%20%C2%B7%2026%20MB-2F6BFF?style=for-the-badge&logo=android&logoColor=white&labelColor=17191C)](https://github.com/GarikMartikyan/Swipey/raw/main/dist/Swipey.apk)
+[![Download the APK](https://img.shields.io/badge/Download%20APK-v1.0%20%C2%B7%2026%20MB-2F6BFF?style=for-the-badge&logo=android&logoColor=white&labelColor=17191C)](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)
 
 <br>
 
@@ -37,7 +37,7 @@ Nothing leaves your phone, and nothing is deleted behind your back.
 Swipey is not on the Play Store, so your phone will want to be told this is deliberate.
 It takes about thirty seconds.
 
-1. **[Download the APK](https://github.com/GarikMartikyan/Swipey/raw/main/dist/Swipey.apk)** — on the phone itself, not on a laptop.
+1. **[Download the APK](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)** — on the phone itself, not on a laptop.
 2. Open it from your notifications, or from **Files → Downloads**.
 3. Android will say it doesn't allow installing unknown apps from this source. Tap
    **Settings**, turn on **Allow from this source**, and press back.
@@ -48,6 +48,11 @@ photos" — with only a handful shared, Swipey can't show you the bin, and so ca
 that what you removed is recoverable. It will say so and send you to settings if you pick
 the other one. That is the only thing it ever asks for; see
 [what it asks for](#what-it-asks-for).
+
+> **If the download finishes but no file appears**, look in your browser's Downloads list
+> for a blocked entry — Chrome quietly holds back APKs it hasn't seen before, and there is
+> a **Download anyway** on it. Failing that, `dist/Swipey.apk` in this repository is the
+> same file, byte for byte.
 
 > **Already have Swipey installed from a previous build?**
 > If Android refuses the install, uninstall the old copy first. That does not touch your
@@ -137,8 +142,9 @@ Android Studio, JDK 17, and an Android 13 (API 33) or newer device. There are no
 services or `local.properties` entries to fill in for a debug build.
 
 `./gradlew assembleRelease` also works on a fresh clone, and produces an **unsigned** APK —
-the release keystore is deliberately not in this repository. The signed build in `dist/` is
-the one published here.
+the release keystore is deliberately not in this repository. The signed build is published
+as a [release](https://github.com/GarikMartikyan/Swipey/releases), and the same file is
+committed at `dist/Swipey.apk` so it can be checked against the tree it was built from.
 
 <br>
 
@@ -160,7 +166,7 @@ appears there.
 
 <div align="center">
 
-**[⬇ Download Swipey v1.0](https://github.com/GarikMartikyan/Swipey/raw/main/dist/Swipey.apk)** · 26 MB · Android 13+
+**[⬇ Download Swipey v1.0](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)** · 26 MB · Android 13+
 
 <sub>Built by <a href="https://github.com/GarikMartikyan">Garik Martikyan</a></sub>
 
