@@ -65,6 +65,10 @@ import com.swipey.app.ui.design.SwipeySpacing
 import com.swipey.app.ui.design.SwipeyText
 import com.swipey.app.ui.design.SwipeyTheme
 import java.util.Calendar
+import com.swipey.app.ui.design.rememberSwipeyHaptics
+import com.swipey.app.ui.design.SwipeyIconButton
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.combinedClickable
 
 /**
  * What this photograph is: the album it came from, and what it costs.
@@ -115,7 +119,6 @@ import java.util.Calendar
  * The one thing that is not Home's is the control's ground. The disc is frosted rather than
  * flat: the picture blurred behind it instead of covered over, which keeps a round object
  * from reading as a hole punched in the photograph the way a solid black disc does at this
- * size. See [FrostedGround].
  *
  * It is drawn *inside* the card rather than over the stage, which means it flies off with the
  * photograph it describes; a caption that stayed behind while its picture left would, for the
@@ -125,14 +128,8 @@ import java.util.Calendar
  * of the semantics tree as plain text while the button carries a name a screen reader finds.
  */
 @Composable
-fun MediaBadge(item: MediaItem, onInfo: () -> Unit, modifier: Modifier = Modifier) {
-    // The card's own size, measured here rather than passed in — it is what lets the
-    // frosted disc place a full-size copy of the photograph behind a 40dp circle. See
-    // [FrostedGround].
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val cardWidth = maxWidth
-        val cardHeight = maxHeight
-
+fun MediaBadge(item: MediaItem, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize()) {
         // What the photograph is doing where the words go, and therefore how much ground
         // they need. Null until the thumbnail has been read, which is a frame or two —
         // [FallbackLuma] covers that window with the value a mid photograph would produce.
@@ -153,11 +150,11 @@ fun MediaBadge(item: MediaItem, onInfo: () -> Unit, modifier: Modifier = Modifie
             Modifier
                 .align(Alignment.TopStart)
                 .padding(start = SwipeySpacing.lg, top = SwipeySpacing.lg)
-                // Clear of the ⓘ, which keeps its own corner and its own geometry — the
-                // disc's frosted ground is aligned by an inset derived from that geometry,
-                // so the caption gets out of its way rather than the other way round. One
-                // touch target plus the gutter is exactly the room it occupies.
-                .padding(end = SwipeySize.touchMin + SwipeySpacing.lg),
+                // The full width, less the gutter. This used to reserve a touch target's
+                // worth of room on the right for the ⓘ; the details sheet is opened by
+                // holding the card now, so there is nothing in that corner to dodge and a
+                // long album name has the whole line back.
+                .padding(end = SwipeySpacing.lg),
         ) {
             SwipeyText(
                 item.bucketName,
@@ -188,128 +185,6 @@ fun MediaBadge(item: MediaItem, onInfo: () -> Unit, modifier: Modifier = Modifie
             )
         }
 
-        BadgeIconButton(
-            item = item,
-            cardWidth = cardWidth,
-            cardHeight = cardHeight,
-            onClick = onInfo,
-            modifier = Modifier.align(Alignment.TopEnd),
-        )
-    }
-}
-
-/**
- * The photograph, blurred, behind whatever this is placed in.
- *
- * A real backdrop blur — the pixels actually under the block, not a tint pretending to be
- * one — without measuring anything at runtime. The trick is that the caller already knows
- * where its block sits relative to the card: it anchored it there. So this draws a
- * *full-card-sized* copy of the same image, aligned to the same corner the block is anchored
- * to and pushed back out by the same inset, which puts every pixel of the copy exactly over
- * the pixel it is standing in for. The block's own clip does the rest.
- *
- * The copy costs no second decode — it is the same URI the card is already showing, so Coil
- * serves it from the memory cache.
- *
- * Two things it is honest about:
- * - **Below Android 12** `Modifier.blur` does nothing, so rather than shipping an
- *   unreadable transparent block, the ground falls back to [SwipeyCaptionScrim] — the flat
- *   scrim the caption's own ramp ends on, so the disc and the ramp agree on an older phone.
- * - **For video** the copy is the frame Coil pulls for the thumbnail, not the frame playing
- *   underneath. Blurred to [FrostRadius] the difference is not visible as detail, but it is
- *   a still: a caption over a moving picture will not shimmer with it.
- */
-@Composable
-private fun BoxScope.FrostedGround(
-    item: MediaItem,
-    cardWidth: Dp,
-    cardHeight: Dp,
-    alignment: Alignment,
-    offsetX: Dp,
-    offsetY: Dp,
-) {
-    if (BlurSupported) {
-        // matchParentSize, so the oversized copy inside cannot drag the block's own size
-        // out to the width of the card.
-        Box(Modifier.matchParentSize()) {
-            AsyncImage(
-                model = contentUriFor(item.id, item.isVideo),
-                // The card behind this is the same picture and already announces itself.
-                contentDescription = null,
-                modifier = Modifier
-                    .requiredSize(cardWidth, cardHeight)
-                    .align(alignment)
-                    .offset(x = offsetX, y = offsetY)
-                    // Unbounded, so the blur samples past the block's edge instead of
-                    // clamping against it — a clamped edge draws a bright seam exactly
-                    // where the glass meets the picture.
-                    .blur(FrostRadius, BlurredEdgeTreatment.Unbounded),
-                contentScale = ContentScale.Crop,
-            )
-        }
-    }
-    Box(Modifier.matchParentSize().background(if (BlurSupported) FrostTint else SwipeyCaptionScrim))
-}
-
-/**
- * The details control: a frosted disc with a glyph, and a full-size target around it.
- *
- * Not [SwipeyIconButton], for the reason its own KDoc gives — a Neutral ghost is a hairline
- * ring in the theme's colours over a transparent ground, which over an arbitrary photograph
- * is invisible. Two boxes rather than one, and for the same reason Home's `PhotoIconButton`
- * uses two: the outer carries the app's 48dp touch floor and the inner is what the eye sees,
- * so the disc can be sized for the photograph without taking the target down with it.
- *
- * Same glass as the caption, so the two read as one system rather than as a caption and a
- * button that happen to share a card. [DiscInset] is derived rather than typed: it is
- * whatever distance the *visible* disc ends up from the card's corner once the padding and
- * the slack inside the touch target are accounted for, and it has to be exact — it is what
- * aligns the disc's blurred copy of the photograph with the photograph.
- */
-@Composable
-private fun BadgeIconButton(
-    item: MediaItem,
-    cardWidth: Dp,
-    cardHeight: Dp,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier
-            .padding(SwipeySpacing.sm)
-            .size(SwipeySize.touchMin)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                role = Role.Button,
-                onClickLabel = Copy.DECK_INFO_ACTION,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(BadgeDisc)
-                .clip(CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            FrostedGround(
-                item = item,
-                cardWidth = cardWidth,
-                cardHeight = cardHeight,
-                alignment = Alignment.TopEnd,
-                offsetX = DiscInset,
-                offsetY = -DiscInset,
-            )
-            SwipeyIcon(
-                SwipeyIcons.Info,
-                // The clickable above carries the name; announcing it twice would read the
-                // control out as "Details, Details".
-                contentDescription = null,
-                tint = SwipeyDarkColors.textPrimary,
-                size = BadgeIconSize,
-            )
-        }
     }
 }
 
@@ -440,11 +315,54 @@ private val BlurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
  * and a details sheet is exactly the kind of thing a user turns the text size up for.
  */
 @Composable
-fun MediaInfoSheet(item: MediaItem, visible: Boolean, onDismiss: () -> Unit) {
+fun MediaInfoSheet(
+    item: MediaItem,
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    /** A plain tap on Share: this one photograph, straight to the system sheet. */
+    onShare: () -> Unit = {},
+    /**
+     * A press and hold on Share.
+     *
+     * The long press is the only way into the multi-select picker, which makes the hint line
+     * at the foot of the sheet load-bearing rather than decorative — an icon cannot say that
+     * it has a second gesture, and nothing else here would.
+     */
+    onShareMany: () -> Unit = {},
+    onViewInGallery: () -> Unit = {},
+    /**
+     * Whether the sheet carries its Share and View-in-gallery glyphs.
+     *
+     * False inside the share picker, where the user is already choosing what to share: a
+     * Share button there would offer a second, smaller way to do the thing the screen exists
+     * for, and holding it would offer to open the picker from inside the picker. What is left
+     * is the sheet's other half — what this photograph actually is — which is the only reason
+     * to open it from a carousel card.
+     */
+    showActions: Boolean = true,
+) {
     val maxHeight = LocalConfiguration.current.screenHeightDp.dp * SheetHeightFraction
 
     SwipeyTheme(colors = SwipeyDarkColors) {
-        SwipeySheet(visible = visible, onDismiss = onDismiss, title = Copy.INFO_TITLE) {
+        SwipeySheet(
+            visible = visible,
+            onDismiss = onDismiss,
+            title = Copy.INFO_TITLE,
+            titleTrailing = if (!showActions) {
+                null
+            } else {
+                {
+                    ShareGlyph(onShare = onShare, onShareMany = onShareMany)
+                    SwipeyIconButton(
+                        icon = SwipeyIcons.Gallery,
+                        contentDescription = Copy.VIEW_IN_GALLERY,
+                        onClick = onViewInGallery,
+                        size = GlyphButton,
+                        iconSize = GlyphIcon,
+                    )
+                }
+            },
+        ) {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -464,6 +382,17 @@ fun MediaInfoSheet(item: MediaItem, visible: Boolean, onDismiss: () -> Unit) {
                 InfoRow(Copy.INFO_ALBUM, item.bucketName)
                 InfoRow(Copy.INFO_ADDED, fullDateTime(item.dateAddedSec))
                 InfoRow(Copy.INFO_PATH, item.relativePath ?: Copy.INFO_UNKNOWN, divider = false)
+                // The only place the long press is written down. See [onShareMany]. Goes
+                // with the glyphs it describes.
+                if (showActions) SwipeyText(
+                    Copy.SHARE_HINT,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = SwipeySpacing.md),
+                    style = SwipeyTheme.typography.label,
+                    color = SwipeyTheme.colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                )
             }
             Spacer(Modifier.height(SwipeySpacing.sm))
         }
@@ -663,4 +592,47 @@ private fun shortDate(dateAddedSec: Long): String {
 private fun fullDateTime(dateAddedSec: Long): String {
     val millis = dateAddedSec * 1000L
     return android.text.format.DateFormat.format("d MMMM yyyy, HH:mm", millis).toString()
+}
+
+
+/** The glyph buttons on the sheet's title line. Smaller than a deck control — this is chrome. */
+private val GlyphButton = 38.dp
+private val GlyphIcon = 19.dp
+
+/**
+ * Share, with two gestures on one glyph.
+ *
+ * `combinedClickable` rather than a gesture detector, because both gestures have to reach a
+ * screen reader: a long press that only exists as a raw pointer callback is a feature blind
+ * users cannot find at all. This way the node carries two labelled actions.
+ */
+@Composable
+private fun ShareGlyph(onShare: () -> Unit, onShareMany: () -> Unit) {
+    val haptics = rememberSwipeyHaptics()
+    val colors = SwipeyTheme.colors
+    Box(
+        Modifier
+            .size(GlyphButton)
+            .clip(CircleShape)
+            .background(colors.surfaceStrong)
+            .combinedClickable(
+                onClickLabel = Copy.SHARE,
+                onLongClickLabel = Copy.SHARE_HINT,
+                onLongClick = {
+                    // The press has already committed by the time this fires, and there is
+                    // nothing on screen that moves to say so — hence the knock.
+                    haptics.commit()
+                    onShareMany()
+                },
+                onClick = onShare,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        SwipeyIcon(
+            SwipeyIcons.Share,
+            contentDescription = Copy.SHARE,
+            tint = colors.textPrimary,
+            size = GlyphIcon,
+        )
+    }
 }

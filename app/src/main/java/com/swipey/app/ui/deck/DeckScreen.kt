@@ -98,6 +98,7 @@ import com.swipey.app.ui.settings.currentBinSide
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import com.swipey.app.ui.common.rememberMediaActions
 
 /**
  * The deck: one photograph at a time, and two ways to decide about it.
@@ -149,6 +150,11 @@ fun DeckScreen(
     // Critical 2).
     var committing by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
+    // The id the share picker opens centred on, or null when it is closed. An id rather than
+    // a flag, because the picker has to open on the card whose details were being read.
+    var picking by remember { mutableStateOf<Long?>(null) }
+    val mediaActions = rememberMediaActions()
+    var actionFailure by remember { mutableStateOf<String?>(null) }
 
     // Fix round 2, Important 5: DECK_BACK_CONFIRM/DECK_DISCARD/DECK_REVIEW were dead
     // copy — nothing intercepted Back, so marked-but-uncommitted items were silently
@@ -398,6 +404,9 @@ fun DeckScreen(
                     // means here — more likely than anything else a tap could do.
                     onTap = { previewing = true },
                     onTapLabel = Copy.DECK_PREVIEW,
+                    // Where the ⓘ in the corner used to go. See SwipeCard.onLongPress.
+                    onLongPress = { showingInfo = true },
+                    onLongPressLabel = Copy.DECK_INFO_ACTION,
                     under = state.next?.let { next -> { NextCardContent(next) } },
                     binSide = binSide,
                 ) { dragProgress ->
@@ -418,7 +427,7 @@ fun DeckScreen(
                     // which states the same things at leisure and has the whole screen.
                     if (!previewing) {
                         SwipeyTheme(colors = SwipeyDarkColors) {
-                            MediaBadge(item = item, onInfo = { showingInfo = true })
+                            MediaBadge(item = item)
                         }
                     }
                 }
@@ -489,6 +498,33 @@ fun DeckScreen(
         }
     }
 
+    // Over everything, and only composed while open: it holds a pager over the whole session,
+    // which on a full phone is a few thousand items.
+    picking?.let { startId ->
+        SharePicker(
+            items = state.items,
+            startId = startId,
+            onShare = { chosen ->
+                if (mediaActions.share(chosen)) picking = null else actionFailure = Copy.NO_APP_FOR_SHARE
+            },
+            onClose = { picking = null },
+        )
+    }
+
+    // Spec §12: nothing on this screen may crash, and a phone with no gallery or no share
+    // target is a real phone. Says so and gets out of the way.
+    actionFailure?.let { message ->
+        SwipeyTheme(colors = SwipeyDarkColors) {
+            SwipeyDialog(
+                visible = true,
+                title = message,
+                confirmText = Copy.DONE,
+                onConfirm = { actionFailure = null },
+                onDismiss = { actionFailure = null },
+            )
+        }
+    }
+
     // Composed unconditionally so it can animate out: SwipeySheet draws nothing at all when
     // invisible, and holding it in the tree is what gives the exit its slide.
     if (item != null) {
@@ -496,6 +532,16 @@ fun DeckScreen(
             item = item,
             visible = showingInfo,
             onDismiss = { showingInfo = false },
+            onShare = {
+                if (!mediaActions.share(item)) actionFailure = Copy.NO_APP_FOR_SHARE
+            },
+            // The sheet closes on the way into the picker. It is describing one photograph
+            // and the picker is about several, so leaving it underneath would be leaving a
+            // caption for something the user is no longer looking at.
+            onShareMany = { showingInfo = false; picking = item.id },
+            onViewInGallery = {
+                if (!mediaActions.viewInGallery(item)) actionFailure = Copy.NO_APP_FOR_VIEW
+            },
         )
     }
 

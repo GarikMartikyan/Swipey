@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -228,6 +229,22 @@ fun SwipeCard(
     commitRequest: Boolean? = null,
     onTap: (() -> Unit)? = null,
     onTapLabel: String? = null,
+    /**
+     * A press held on the photograph. The deck's details sheet.
+     *
+     * It replaces a button that used to sit in the card's top corner. The corner was the
+     * only chrome left on the picture, and it cost a touch target's worth of the caption's
+     * line to stay clear of — so the gesture is both less to draw and more room for the one
+     * thing the card is for. The price is that a long press announces itself to nobody,
+     * which is why it is registered as a labelled long-click action rather than a raw
+     * pointer callback: a screen reader lists it, even though the eye cannot see it.
+     *
+     * Safe beside the drag. A press that starts moving is cancelled before the timeout, so
+     * a swipe never opens the sheet; a press that stays still for the timeout opens it and
+     * the drag detector never sees a gesture worth committing.
+     */
+    onLongPress: (() -> Unit)? = null,
+    onLongPressLabel: String? = null,
     under: (@Composable () -> Unit)? = null,
     /**
      * Which side bins. Defaulted so the previews and the drag-feedback sampler below keep
@@ -495,11 +512,21 @@ fun SwipeCard(
                     // rather than fired.
                     .then(
                         if (onTap != null) {
-                            Modifier.clickable(
+                            Modifier.combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClickLabel = onTapLabel,
                                 role = Role.Button,
+                                onLongClickLabel = onLongPressLabel,
+                                onLongClick = onLongPress?.let {
+                                    {
+                                        // Nothing on screen moves when the sheet is
+                                        // summoned, so the knock is the only confirmation
+                                        // that the hold registered at all.
+                                        haptics.commit()
+                                        it()
+                                    }
+                                },
                                 onClick = onTap,
                             )
                         } else {

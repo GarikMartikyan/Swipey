@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
@@ -954,6 +955,14 @@ fun SwipeySheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     title: String? = null,
+    /**
+     * Controls that belong to the sheet as a whole, on the title's line.
+     *
+     * A slot rather than a list of buttons, because what goes here is specific to the sheet:
+     * the details sheet puts Share and View-in-gallery here precisely so they cost the list
+     * below no height at all. Ignored when [title] is null — there is no line to sit on.
+     */
+    titleTrailing: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = SwipeyTheme.colors
@@ -1119,14 +1128,26 @@ fun SwipeySheet(
                         .background(colors.hairline),
                 )
                 if (title != null) {
-                    SwipeyText(
-                        title,
-                        style = SwipeyTheme.typography.title,
-                        color = colors.textPrimary,
-                        modifier = Modifier
+                    Row(
+                        Modifier
                             .fillMaxWidth()
                             .padding(bottom = SwipeySpacing.md),
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SwipeyText(
+                            title,
+                            style = SwipeyTheme.typography.title,
+                            color = colors.textPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (titleTrailing != null) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(SwipeySpacing.sm),
+                                verticalAlignment = Alignment.CenterVertically,
+                                content = titleTrailing,
+                            )
+                        }
+                    }
                 }
                 Column(Modifier.fillMaxWidth(), content = content)
             }

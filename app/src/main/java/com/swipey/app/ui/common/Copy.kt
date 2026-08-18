@@ -533,6 +533,44 @@ object Copy {
      * which is exactly the situation. Dropping the row instead would make two photographs
      * produce sheets of different heights for no reason the user can see.
      */
+    // -----------------------------------------------------------------------
+    // Share, and the carousel behind it
+    // -----------------------------------------------------------------------
+
+    /**
+     * The two glyphs on the Details sheet's title line.
+     *
+     * They sit there rather than in the list because the list is seven rows of facts and
+     * these are not facts. It costs the sheet no height at all — which is the trade: the
+     * least discoverable placement, bought back by the hint underneath.
+     */
+    const val SHARE = "Share"
+    const val VIEW_IN_GALLERY = "View in gallery"
+
+    /** Says the long press exists. An icon cannot, and nothing else on the sheet would. */
+    const val SHARE_HINT = "Hold to pick several"
+
+    /** When nothing on the phone can open a picture, or handle a share. */
+    const val NO_APP_FOR_VIEW = "No app on this phone opens photos."
+    const val NO_APP_FOR_SHARE = "No app on this phone can share photos."
+
+    const val PICK_TITLE = "Choose photos"
+    const val PICK_NONE = "Nothing selected yet"
+    fun pickSelected(count: Int) = "$count selected"
+    fun pickShare(count: Int) = if (count == 0) SHARE else "Share $count"
+    fun pickPosition(index: Int, total: Int) = "${grouped(index)} of ${grouped(total)}"
+
+    /** The selected-only grid, reached from the count pill. */
+    const val PICK_GRID_TITLE = "Selected"
+    const val PICK_GRID_EMPTY = "Nothing selected yet"
+    const val PICK_GRID_EMPTY_BODY = "Close this and tick a few photos."
+
+    /** Per-card controls in the carousel. Icon-only, so these are their whole names. */
+    const val PICK_SELECT = "Select this photo"
+    const val PICK_DESELECT = "Deselect this photo"
+    const val PICK_PREVIEW = "See it full screen"
+    const val PICK_CLOSE = "Close"
+
     const val INFO_UNKNOWN = "—"
 
     /**

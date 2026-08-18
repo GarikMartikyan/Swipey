@@ -468,6 +468,63 @@ object SwipeyIcons {
     }
 
     /**
+     * Share. An arrow leaving an open tray.
+     *
+     * Not Android's three-node graph, which draws a thing (a network) rather than an action
+     * and is unreadable at this weight — three dots and two hairlines collapse into a smudge
+     * at 20dp. An arrow going up out of a container says *out of here, to somewhere else*,
+     * which is the whole of what the button does.
+     */
+    val Share: ImageVector = icon("Share") {
+        // The tray, open at the top so the arrow can leave through it.
+        moveTo(6f, 11.5f)
+        lineTo(6f, 19f)
+        arcTo(1.5f, 1.5f, 0f, false, false, 7.5f, 20.5f)
+        lineTo(16.5f, 20.5f)
+        arcTo(1.5f, 1.5f, 0f, false, false, 18f, 19f)
+        lineTo(18f, 11.5f)
+        // The arrow, and its head.
+        moveTo(12f, 15f)
+        lineTo(12f, 3.5f)
+        moveTo(8f, 7.5f)
+        lineTo(12f, 3.5f)
+        lineTo(16f, 7.5f)
+    }
+
+    /**
+     * Gallery. A framed picture: a horizon, a sun, and a hill behind it.
+     *
+     * The universal mark for "an image lives here", and the right one for a button that hands
+     * the photograph to another app — it names the destination rather than the journey. Two
+     * overlapping slopes rather than one, because a single triangle in a box reads as a play
+     * button turned on its side.
+     */
+    val Gallery: ImageVector = icon("Gallery") {
+        moveTo(5.5f, 3.5f)
+        lineTo(18.5f, 3.5f)
+        arcTo(2f, 2f, 0f, false, true, 20.5f, 5.5f)
+        lineTo(20.5f, 18.5f)
+        arcTo(2f, 2f, 0f, false, true, 18.5f, 20.5f)
+        lineTo(5.5f, 20.5f)
+        arcTo(2f, 2f, 0f, false, true, 3.5f, 18.5f)
+        lineTo(3.5f, 5.5f)
+        arcTo(2f, 2f, 0f, false, true, 5.5f, 3.5f)
+        close()
+        // Sun.
+        moveTo(8f, 10.4f)
+        arcTo(1.6f, 1.6f, 0f, false, true, 8f, 7.2f)
+        arcTo(1.6f, 1.6f, 0f, false, true, 8f, 10.4f)
+        close()
+        // The near slope, then the far one rising behind it.
+        moveTo(3.5f, 17f)
+        lineTo(9f, 11.5f)
+        lineTo(14.5f, 17f)
+        moveTo(12.5f, 15f)
+        lineTo(15.5f, 12f)
+        lineTo(20.5f, 17f)
+    }
+
+    /**
      * Two arrows, one going each way — which side of the deck bins.
      *
      * Not [Bin], and not [Shuffle]. The bin glyph would name the outcome and say nothing
