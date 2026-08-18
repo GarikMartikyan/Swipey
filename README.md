@@ -6,7 +6,7 @@
 
 <br>
 
-[![Download the APK](https://img.shields.io/badge/Download%20APK-v1.1%20%C2%B7%2026%20MB-2F6BFF?style=for-the-badge&logo=android&logoColor=white&labelColor=17191C)](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)
+[![Download the APK](https://img.shields.io/badge/Download%20APK-v1.2%20%C2%B7%2026%20MB-2F6BFF?style=for-the-badge&logo=android&logoColor=white&labelColor=17191C)](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)
 
 <br>
 
@@ -74,6 +74,11 @@ smallest), your **albums** listed with what each one is costing you in gigabytes
 **Recent** tile that puts you back on the card after the last one you judged.
 
 Videos play in the deck — scrub them with your thumb, and hear them if you want to.
+
+**Hold a card** for everything the file is: size, resolution, folder, when it arrived. From
+there you can open it in your gallery app, or share it — and **holding Share** opens a
+carousel of the queue you are in, so you can tick several and send them in one go. None of
+that counts as a decision; the photograph is still undecided when you come back.
 
 <br>
 
@@ -168,7 +173,7 @@ appears there.
 
 <div align="center">
 
-**[⬇ Download Swipey v1.1](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)** · 26 MB · Android 13+
+**[⬇ Download Swipey v1.2](https://github.com/GarikMartikyan/Swipey/releases/latest/download/Swipey.apk)** · 26 MB · Android 13+
 
 <sub>Built by <a href="https://github.com/GarikMartikyan">Garik Martikyan</a></sub>
 
