@@ -9,7 +9,21 @@
         android:label="Swipey"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.Swipey">
-        <activity android:name=".MainActivity" android:exported="true">
+        <!--
+            Upright, always. Swipey is a stack of 7:10 portrait cards with its two decisions
+            along the bottom edge, under the thumb holding the phone; there is no landscape
+            arrangement of that which is not a different screen. Locked rather than merely
+            preferred, so a phone tipped over mid-swipe cannot rebuild the Activity and
+            interrupt a decision.
+
+            "portrait" and not "userPortrait": the point is that rotation does nothing, and
+            userPortrait would still let the system flip the app when the user's own rotation
+            lock is off.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
