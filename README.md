@@ -51,8 +51,8 @@ the other one. That is the only thing it ever asks for; see
 
 > **If the download finishes but no file appears**, look in your browser's Downloads list
 > for a blocked entry — Chrome quietly holds back APKs it hasn't seen before, and there is
-> a **Download anyway** on it. Failing that, `dist/Swipey.apk` in this repository is the
-> same file, byte for byte.
+> a **Download anyway** on it. Failing that, every build is also listed on the
+> [releases page](https://github.com/GarikMartikyan/Swipey/releases).
 
 > **Already have Swipey installed from a previous build?**
 > If Android refuses the install, uninstall the old copy first. That does not touch your
@@ -143,9 +143,10 @@ Android Studio, JDK 17, and an Android 13 (API 33) or newer device. There are no
 services or `local.properties` entries to fill in for a debug build.
 
 `./gradlew assembleRelease` also works on a fresh clone, and produces an **unsigned** APK —
-the release keystore is deliberately not in this repository. The signed build is published
-as a [release](https://github.com/GarikMartikyan/Swipey/releases), and the same file is
-committed at `dist/Swipey.apk` so it can be checked against the tree it was built from.
+the release keystore is deliberately not in this repository, so only a signed build from the
+[releases page](https://github.com/GarikMartikyan/Swipey/releases) installs over an existing
+Swipey. Each release is tagged, so the APK can always be checked against the tree it came
+from.
 
 <br>
 
